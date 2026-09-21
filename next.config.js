@@ -1,8 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Ignora erros de linting e typescript APENAS durante o build da Vercel
-  // para evitar que erros menores travem o deploy inicial da fundação
+  // Ignora temporariamente erros de lint/tipagem para garantir o build inicial da arquitetura
   eslint: {
     ignoreDuringBuilds: true,
   },
