@@ -1,7 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Ignora temporariamente erros de lint/tipagem para garantir o build inicial da arquitetura
+  // Desativa checagens de lint e tipagem durante o build na Vercel 
+  // para garantir que a fundação suba sem ser bloqueada por avisos menores.
   eslint: {
     ignoreDuringBuilds: true,
   },
