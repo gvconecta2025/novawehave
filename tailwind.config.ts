@@ -9,7 +9,6 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        // Mapeia a variável CSS da fonte Inter injetada no layout.tsx
         sans: ["var(--font-inter)", "sans-serif"],
       },
     },
