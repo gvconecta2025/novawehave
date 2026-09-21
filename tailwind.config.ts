@@ -9,6 +9,7 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
+        // Vincula com a variável injetada pelo Next.js Font Optimization no layout
         sans: ["var(--font-inter)", "sans-serif"],
       },
     },
