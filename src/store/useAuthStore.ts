@@ -1,71 +1,83 @@
 import { create } from 'zustand';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { autenticacao, bancoDeDados } from '@/lib/firebase/config';
 import { UsuarioApp, PerfilRBAC } from '@/types/auth';
 
+// Expansão do tipo localmente para suportar a Trava da Folguista (Lei 3)
+interface UsuarioAppExpandido extends UsuarioApp {
+  acesso_liberado?: boolean;
+}
+
 interface AuthState {
   usuarioAuth: User | null;
-  usuarioDb: UsuarioApp | null;
+  usuarioDb: UsuarioAppExpandido | null;
   perfilRbac: PerfilRBAC | null;
   carregando: boolean;
-  inicializarAuth: () => void;
+  erroAcesso: string | null;
+  configurarAutenticacao: () => void;
   fazerLogout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   usuarioAuth: null,
   usuarioDb: null,
   perfilRbac: null,
   carregando: true,
+  erroAcesso: null,
 
-  inicializarAuth: () => {
-    // Escuta alterações de sessão no Firebase
-    const desinscrever = onAuthStateChanged(autenticacao, async (usuarioFirebase) => {
-      if (usuarioFirebase) {
+  configurarAutenticacao: () => {
+    const desinscreverAuth = onAuthStateChanged(autenticacao, (user) => {
+      if (user) {
         try {
-          // Busca os dados adicionais (RBAC) no Firestore
-          const refDoc = doc(bancoDeDados, 'usuarios', usuarioFirebase.uid);
-          const snapDoc = await getDoc(refDoc);
+          const docRef = doc(bancoDeDados, 'usuarios', user.uid);
+          
+          // onSnapshot em vez de getDoc para derrubar a sessão em TEMPO REAL se o admin revogar
+          onSnapshot(docRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const dados = docSnap.data() as UsuarioAppExpandido;
+              
+              // BARREIRA CONDICIONAL (Folguista)
+              if (dados.perfil_rbac === 'Folguista' && dados.acesso_liberado !== true) {
+                get().fazerLogout();
+                const msgErro = 'Acesso bloqueado: Seu turno não está ativo no momento. Contate o Supervisor.';
+                set({ 
+                  usuarioAuth: null, 
+                  usuarioDb: null, 
+                  perfilRbac: null, 
+                  carregando: false,
+                  erroAcesso: msgErro
+                });
+                alert(`⚠️ ${msgErro}`);
+                return;
+              }
 
-          if (snapDoc.exists()) {
-            const dados = snapDoc.data() as UsuarioApp;
-            set({
-              usuarioAuth: usuarioFirebase,
-              usuarioDb: dados,
-              perfilRbac: dados.perfil_rbac,
-              carregando: false,
-            });
-          } else {
-            console.error('[RBAC] Documento de usuário não encontrado no Firestore.');
-            set({ usuarioAuth: usuarioFirebase, usuarioDb: null, perfilRbac: null, carregando: false });
-          }
-        } catch (erro) {
-          console.error('[ERRO AUTH] Falha ao recuperar perfil RBAC:', erro);
-          set({ carregando: false });
+              set({
+                usuarioAuth: user,
+                usuarioDb: dados,
+                perfilRbac: dados.perfil_rbac,
+                carregando: false,
+                erroAcesso: null
+              });
+            } else {
+              get().fazerLogout();
+            }
+          });
+        } catch (error) {
+          console.error("[ERRO AUTH ZUSTAND]", error);
+          set({ carregando: false, erroAcesso: 'Falha ao validar os privilégios do usuário no banco.' });
         }
       } else {
-        // Usuário deslogado
-        set({
-          usuarioAuth: null,
-          usuarioDb: null,
-          perfilRbac: null,
-          carregando: false,
-        });
+        set({ usuarioAuth: null, usuarioDb: null, perfilRbac: null, carregando: false });
       }
     });
 
-    // Função de limpeza do listener (embora o Zustand mantenha global)
-    return desinscrever;
+    return desinscreverAuth;
   },
 
   fazerLogout: async () => {
-    try {
-      await signOut(autenticacao);
-      set({ usuarioAuth: null, usuarioDb: null, perfilRbac: null, carregando: false });
-      window.location.href = '/login'; // Força o redirecionamento de segurança
-    } catch (erro) {
-      console.error('[ERRO LOGOUT] Falha ao encerrar sessão:', erro);
-    }
-  },
+    set({ carregando: true });
+    await signOut(autenticacao);
+    set({ usuarioAuth: null, usuarioDb: null, perfilRbac: null, carregando: false, erroAcesso: null });
+  }
 }));
