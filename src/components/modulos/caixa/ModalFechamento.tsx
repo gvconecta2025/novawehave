@@ -32,12 +32,10 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
   useEffect(() => {
     if (!aberto) return;
 
-    // Define o marco zero do dia atual
     const inicioDoDia = new Date();
     inicioDoDia.setHours(0, 0, 0, 0);
     const inicioDoDiaMillis = inicioDoDia.getTime();
 
-    // Query simples (KISS) buscando apenas comandas concluídas para evitar erros de índices compostos no Firebase
     const q = query(
       collection(bancoDeDados, 'comandas'),
       where('status_atual', '==', 'Faturado/Concluído')
@@ -51,21 +49,20 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
           ...doc.data() 
         })) as ComandaFechamento[];
         
-        // Filtro Reativo em Memória: Considera a data de faturamento com fallback seguro para a data de criação
+        // BLINDAGEM DE FILTRO: Fallbacks seguros e validação de existência da função toMillis
         const faturadosHoje = dados.filter(c => {
           const timestampReferencia = c.auditoria?.faturado_em || c.auditoria?.criado_em;
-          if (!timestampReferencia) return false;
+          if (!timestampReferencia || typeof timestampReferencia.toMillis !== 'function') return false;
           
           return timestampReferencia.toMillis() >= inicioDoDiaMillis;
         });
         
         setComandasHoje(faturadosHoje);
         setCarregando(false);
-        setErro(null); // Limpa estado de erro em caso de reconexão bem-sucedida
+        setErro(null); 
       },
       (err: any) => {
         console.error('[ERRO FECHAMENTO CAIXA]', err);
-        // Lei Anti-Silêncio: Exibição clara do erro técnico na interface para diagnóstico imediato
         setErro(`Falha no Firestore [${err.code || 'Erro Técnico'}]: ${err.message}`);
         setCarregando(false);
       }
@@ -76,11 +73,9 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
 
   if (!aberto) return null;
 
-  // Consolidação Financeira em Memória
   const totais = comandasHoje.reduce(
     (acc, comanda) => {
-      // Usa o valor do objeto pagamento (se existir) ou o valor_total da comanda
-      const valor = comanda.pagamento ? (comanda.pagamento.valor_recebido - comanda.pagamento.troco) : comanda.valor_total;
+      const valor = comanda.pagamento ? (comanda.pagamento.valor_recebido - comanda.pagamento.troco) : (Number(comanda.valor_total) || 0);
       const metodo = comanda.pagamento?.metodo || 'Outros';
 
       acc.total += valor;
@@ -108,7 +103,6 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
           </button>
         </div>
 
-        {/* Bloco de Erro Detalhado Visível (Anti-Silêncio) */}
         {erro && (
           <div className="bg-red-50 p-4 border-b border-red-200 text-sm font-medium text-red-800 shadow-inner break-words">
             ⚠️ <strong>Diagnóstico:</strong> {erro}
