@@ -14,45 +14,66 @@ interface DetalheProduto {
   saldo_estoque: number;
 }
 
+interface ConfiguracoesCMS {
+  whatsapp_loja: string;
+  desconto_pix_percentual: number;
+}
+
 export default function PaginaProduto({ params }: { params: { id: string } }) {
   const [produto, setProduto] = useState<DetalheProduto | null>(null);
+  const [configuracoes, setConfiguracoes] = useState<ConfiguracoesCMS>({
+    whatsapp_loja: '5533999999999',
+    desconto_pix_percentual: 10,
+  });
+  
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   
   const { adicionarProduto } = useComparadorStore();
 
   useEffect(() => {
-    const buscarProduto = async () => {
+    const buscarDados = async () => {
       try {
-        const docRef = doc(bancoDeDados, 'produtos', params.id);
-        const docSnap = await getDoc(docRef);
+        const [docSnapProduto, docSnapConfig] = await Promise.all([
+          getDoc(doc(bancoDeDados, 'produtos', params.id)),
+          getDoc(doc(bancoDeDados, 'configuracoes', 'geral'))
+        ]);
 
-        if (docSnap.exists()) {
-          const data = docSnap.data();
+        if (docSnapProduto.exists()) {
+          const dataProd = docSnapProduto.data();
           setProduto({
-            id: docSnap.id,
-            nome: data.nome || 'Produto Sem Nome',
-            descricao: data.descricao || 'Nenhuma descrição detalhada fornecida para este item.',
-            preco: data.preco || 0,
-            saldo_estoque: data.saldo_estoque || 0,
+            id: docSnapProduto.id,
+            nome: dataProd.nome || 'Produto Sem Nome',
+            descricao: dataProd.descricao || 'Nenhuma descrição detalhada fornecida.',
+            preco: dataProd.preco || 0,
+            saldo_estoque: dataProd.saldo_estoque || 0,
           });
         } else {
           setErro('Produto não encontrado ou removido do catálogo.');
         }
+
+        if (docSnapConfig.exists()) {
+          const dataConfig = docSnapConfig.data();
+          setConfiguracoes({
+            whatsapp_loja: dataConfig.whatsapp_loja || '5533999999999',
+            desconto_pix_percentual: typeof dataConfig.desconto_pix_percentual === 'number' ? dataConfig.desconto_pix_percentual : 10,
+          });
+        }
+
       } catch (err) {
         console.error('[ERRO PRODUTO DINÂMICO]', err);
-        setErro('Ocorreu um erro ao carregar os detalhes do produto.');
+        setErro('Ocorreu um erro ao carregar os detalhes do produto e sistema.');
       } finally {
         setCarregando(false);
       }
     };
 
-    buscarProduto();
+    buscarDados();
   }, [params.id]);
 
   const lidarComCompraO2O = () => {
     if (!produto) return;
-    const numeroLoja = '5533999999999'; // Substituir pelo WhatsApp real da loja
+    const numeroLoja = configuracoes.whatsapp_loja; 
     const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco);
     const texto = `Olá We Have! 👋\n\nEstou a ver o produto *${produto.nome}* no site por ${precoFormatado}.\nGostaria de fechar a compra. Podemos prosseguir?`;
     window.open(`https://wa.me/${numeroLoja}?text=${encodeURIComponent(texto)}`, '_blank', 'noopener,noreferrer');
@@ -80,12 +101,12 @@ export default function PaginaProduto({ params }: { params: { id: string } }) {
     );
   }
 
-  const precoAVista = produto.preco * 0.9;
+  const fatorDesconto = 1 - (configuracoes.desconto_pix_percentual / 100);
+  const precoAVista = produto.preco * fatorDesconto;
   const parcela = produto.preco / 12;
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-      {/* Breadcrumb para SEO e Navegação */}
       <nav className="mb-8 flex text-sm text-gray-500">
         <Link href="/" className="hover:text-blue-600">Home</Link>
         <span className="mx-2">/</span>
@@ -93,12 +114,10 @@ export default function PaginaProduto({ params }: { params: { id: string } }) {
       </nav>
 
       <div className="grid grid-cols-1 gap-12 lg:grid-cols-2">
-        {/* Coluna 1: Imagem Placeholder Ampla */}
         <div className="flex aspect-square w-full items-center justify-center rounded-3xl bg-gray-100 border border-gray-200">
           <span className="text-9xl opacity-20 grayscale">📦</span>
         </div>
 
-        {/* Coluna 2: Informações de Conversão */}
         <div className="flex flex-col justify-center">
           <h1 className="mb-4 text-3xl font-black text-gray-900 sm:text-4xl">{produto.nome}</h1>
           
@@ -117,7 +136,11 @@ export default function PaginaProduto({ params }: { params: { id: string } }) {
               <p className="text-4xl font-black text-green-600">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(precoAVista)}
               </p>
-              <span className="mb-1 text-sm font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded">-10% PIX</span>
+              {configuracoes.desconto_pix_percentual > 0 && (
+                <span className="mb-1 text-sm font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded">
+                  -{configuracoes.desconto_pix_percentual}% PIX
+                </span>
+              )}
             </div>
             <p className="text-sm font-medium text-gray-600">
               ou em até <strong className="text-gray-900">12x de {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela)}</strong> sem juros no cartão.
@@ -129,7 +152,6 @@ export default function PaginaProduto({ params }: { params: { id: string } }) {
             <p className="text-gray-600 leading-relaxed text-sm whitespace-pre-wrap">{produto.descricao}</p>
           </div>
 
-          {/* Botões de Ação */}
           <div className="flex flex-col gap-3 sm:flex-row">
             <button
               onClick={lidarComCompraO2O}
