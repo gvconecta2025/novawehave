@@ -9,7 +9,7 @@ import ModalNovaGarantia from '@/components/modulos/pdv/ModalNovaGarantia';
 export default function PdvWorkspace() {
   const { adicionarItem } = useComandaStore();
   const [produtos, setProdutos] = useState<ProdutoComanda[]>([]);
-  const [busca, setBusca] = useState(''); // Estado da Busca Inteligente
+  const [busca, setBusca] = useState('');
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   
@@ -21,12 +21,16 @@ export default function PdvWorkspace() {
     const desinscrever = onSnapshot(
       q,
       (snapshot) => {
-        const produtosData = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          nome: doc.data().nome,
-          preco: doc.data().preco,
-          quantidade: 0,
-        })) as ProdutoComanda[];
+        const produtosData = snapshot.docs.map((doc) => {
+          const data = doc.data();
+          // BLINDAGEM DE RENDERIZAÇÃO: Fallbacks seguros para evitar falhas de Client-Side
+          return {
+            id: doc.id,
+            nome: data.nome || 'Produto Sem Nome',
+            preco: Number(data.preco) || 0,
+            quantidade: 0,
+          };
+        }) as ProdutoComanda[];
         
         setProdutos(produtosData);
         setCarregando(false);
@@ -42,9 +46,9 @@ export default function PdvWorkspace() {
     return () => desinscrever();
   }, []);
 
-  // Filtro Inteligente em Memória (Zero Latency)
+  // BLINDAGEM NO FILTRO: Optional Chaining e Coalescência
   const produtosFiltrados = produtos.filter(p => 
-    p.nome.toLowerCase().includes(busca.toLowerCase())
+    (p.nome || '').toLowerCase().includes((busca || '').toLowerCase())
   );
 
   return (
@@ -75,7 +79,6 @@ export default function PdvWorkspace() {
         </div>
       )}
 
-      {/* Barra de Busca Inteligente */}
       <div className="mb-6 relative">
         <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
           <span className="text-gray-400">🔍</span>
@@ -108,7 +111,7 @@ export default function PdvWorkspace() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-10 overflow-y-auto">
           {produtosFiltrados.length === 0 ? (
             <div className="col-span-full py-12 text-center text-gray-400 font-medium bg-white rounded-xl border border-gray-100">
-              Nenhum produto encontrado com o termo "{busca}".
+              Nenhum produto encontrado com o termo &quot;{busca}&quot;.
             </div>
           ) : (
             produtosFiltrados.map((produto) => (
