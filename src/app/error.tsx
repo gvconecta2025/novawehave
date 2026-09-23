@@ -11,8 +11,7 @@ export default function ErrorBoundaryGlobal({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log silencioso para ferramentas de monitorização (Sentry, etc.)
-    console.error('[ERRO CAPTURADO PELO BOUNDARY GLOBAL]:', error);
+    console.error('[ERRO CAPTURADO PELO BOUNDARY]:', error);
   }, [error]);
 
   return (
@@ -22,18 +21,18 @@ export default function ErrorBoundaryGlobal({
           <span className="mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-red-100 text-5xl font-bold text-red-600 shadow-inner">
             ⚠️
           </span>
-          <h1 className="text-3xl font-black tracking-tight text-gray-900">FALHA NO SISTEMA</h1>
+          <h1 className="text-3xl font-black tracking-tight text-gray-900">FALHA DE EXECUÇÃO</h1>
           <p className="mt-2 text-sm font-semibold text-red-600 uppercase tracking-widest">
-            Lei Anti-Silêncio: Exceção Client-Side Interceptada
+            Lei Anti-Silêncio: Exceção Interceptada
           </p>
         </div>
 
         <div className="mb-8 overflow-hidden rounded-lg border border-red-200 bg-red-50 shadow-inner">
           <div className="border-b border-red-200 bg-red-100 px-4 py-2 text-xs font-bold text-red-800 uppercase tracking-wider">
-            Detalhe Técnico do Erro
+            Detalhe Técnico Exato do Erro
           </div>
           <div className="max-h-48 overflow-y-auto p-4 font-mono text-sm text-red-900 whitespace-pre-wrap break-words">
-            {error.message || 'Erro desconhecido de renderização. Verifique o console do navegador para mais detalhes.'}
+            {error.message || 'Erro desconhecido. Verifique o console.'}
           </div>
         </div>
 
@@ -42,14 +41,14 @@ export default function ErrorBoundaryGlobal({
             onClick={() => reset()}
             className="flex items-center justify-center gap-2 rounded-lg bg-red-600 px-8 py-3 text-sm font-bold text-white shadow-md transition-all hover:bg-red-700 active:scale-95"
           >
-            <span>🔄</span> Tentar Novamente
+            Tentar Novamente
           </button>
           
           <Link
-            href="/pdv"
+            href="/"
             className="flex items-center justify-center gap-2 rounded-lg border-2 border-gray-200 bg-white px-8 py-3 text-sm font-bold text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50 active:scale-95"
           >
-            <span>🏠</span> Voltar ao PDV
+            Voltar ao Início
           </Link>
         </div>
       </div>
