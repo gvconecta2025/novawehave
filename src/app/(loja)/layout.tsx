@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+// 1. IMPORTAÇÃO DO WIDGET ADICIONADA AQUI
+import ComparadorWidget from '@/components/modulos/loja/ComparadorWidget';
 
 export default function LojaLayout({ children }: { children: React.ReactNode }) {
   const [busca, setBusca] = useState('');
 
   const lidarComBusca = (e: React.FormEvent) => {
     e.preventDefault();
-    // A implementação da busca full-text será feita posteriormente
     alert(`Buscando por: ${busca}`);
   };
 
@@ -17,21 +18,18 @@ export default function LojaLayout({ children }: { children: React.ReactNode }) 
       
       {/* Header Responsivo */}
       <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white shadow-sm">
-        {/* Faixa de Aviso (Top Bar) */}
         <div className="bg-blue-600 px-4 py-1.5 text-center text-xs font-medium text-white sm:text-sm">
           Compre pelo site e retire na loja em até 2 horas! 🚀
         </div>
 
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           
-          {/* Logo */}
           <Link href="/" className="flex items-center">
             <h1 className="text-2xl font-black tracking-widest text-zinc-900">
               WE<span className="text-blue-600">HAVE</span>
             </h1>
           </Link>
 
-          {/* Barra de Busca (Expande no Mobile) */}
           <form onSubmit={lidarComBusca} className="flex flex-1 sm:max-w-md">
             <div className="flex w-full items-center overflow-hidden rounded-full border border-gray-300 bg-gray-100 px-4 py-2 transition-colors focus-within:border-blue-500 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
               <span className="text-gray-400">🔍</span>
@@ -45,7 +43,6 @@ export default function LojaLayout({ children }: { children: React.ReactNode }) 
             </div>
           </form>
 
-          {/* Ações (Contato / O2O) */}
           <div className="hidden sm:flex sm:items-center sm:gap-4">
             <a 
               href="https://wa.me/5533999999999" 
@@ -60,12 +57,15 @@ export default function LojaLayout({ children }: { children: React.ReactNode }) 
         </div>
       </header>
 
-      {/* Conteúdo Principal (Scroll Infinito Natural) */}
-      <main className="flex-1">
+      {/* Conteúdo Principal */}
+      <main className="flex-1 relative">
         {children}
+        
+        {/* 2. INJEÇÃO DO COMPONENTE FLUTUANTE ADICIONADA AQUI */}
+        <ComparadorWidget />
       </main>
 
-      {/* Rodapé (Footer) com Gatilhos de Confiança */}
+      {/* Rodapé (Footer) */}
       <footer className="mt-16 bg-zinc-900 pt-12 text-zinc-300">
         <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 sm:grid-cols-2 md:grid-cols-4 sm:px-6 lg:px-8 pb-12">
           <div>
