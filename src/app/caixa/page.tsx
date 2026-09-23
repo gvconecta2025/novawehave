@@ -52,10 +52,9 @@ export default function PainelCaixa() {
           ...doc.data(),
         })) as ComandaPendente[];
 
-        // BLINDAGEM DE ORDENAÇÃO: Valida se a função toMillis existe no timestamp
         dados.sort((a, b) => {
-          const tempoA = typeof a.auditoria?.criado_em?.toMillis === 'function' ? a.auditoria.criado_em.toMillis() : 0;
-          const tempoB = typeof b.auditoria?.criado_em?.toMillis === 'function' ? b.auditoria.criado_em.toMillis() : 0;
+          const tempoA = a.auditoria?.criado_em?.toMillis() || 0;
+          const tempoB = b.auditoria?.criado_em?.toMillis() || 0;
           return tempoA - tempoB; 
         });
 
@@ -72,6 +71,7 @@ export default function PainelCaixa() {
     return () => desinscrever();
   }, []);
 
+  // AÇÃO 1: Baixa Operacional
   const lidarComProcessamento = async (id: string, fluxo_operacional: string, status_atual: string) => {
     if (!confirm(`Confirmar o processamento fiscal de ${fluxo_operacional}? A comanda sairá da fila.`)) return;
     
@@ -98,6 +98,7 @@ export default function PainelCaixa() {
           <p className="text-gray-500 mt-1">Fila Operacional - Emissão de NFe, NFS-e e Notas de Devolução (Bling)</p>
         </div>
         
+        {/* AÇÃO 1: Botão Fechar Turno */}
         <button 
           onClick={() => setModalFechamentoAberto(true)}
           className="flex items-center gap-2 rounded bg-gray-900 px-6 py-3 font-bold text-white shadow-md transition hover:bg-black active:scale-95"
@@ -150,7 +151,7 @@ export default function PainelCaixa() {
                         {isServico && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-bold uppercase">Serviço</span>}
                       </div>
                       <div className="text-2xl font-black">
-                        {isEstorno ? 'DEVOLUÇÃO' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(comanda.valor_total || 0)}
+                        {isEstorno ? 'DEVOLUÇÃO' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(comanda.valor_total)}
                       </div>
                     </div>
 
@@ -159,22 +160,22 @@ export default function PainelCaixa() {
                         <p className="text-xs text-gray-400 font-semibold uppercase">
                           {isServico ? 'Técnico Responsável' : 'Operador / Vendedor'}
                         </p>
-                        <p className="text-sm text-gray-800 font-bold">{comanda.auditoria?.criado_por_nome || 'Desconhecido'}</p>
+                        <p className="text-sm text-gray-800 font-bold">{comanda.auditoria.criado_por_nome}</p>
                       </div>
                       
                       {isEstorno ? (
                         <div className="space-y-2 bg-red-50 p-2 rounded border border-red-100">
-                          <p className="text-xs font-bold text-red-900">Produto: <span className="font-medium">{comanda.dados_garantia?.produto_defeito || 'N/A'}</span></p>
-                          <p className="text-xs font-bold text-red-900">Ação: <span className="font-medium">{comanda.dados_garantia?.acao_imediata || 'N/A'}</span></p>
-                          <p className="text-xs font-bold text-red-900">Motivo: <span className="font-medium italic">&quot;{comanda.dados_garantia?.motivo_troca || 'Sem motivo detalhado'}&quot;</span></p>
+                          <p className="text-xs font-bold text-red-900">Produto: <span className="font-medium">{comanda.dados_garantia?.produto_defeito}</span></p>
+                          <p className="text-xs font-bold text-red-900">Ação: <span className="font-medium">{comanda.dados_garantia?.acao_imediata}</span></p>
+                          <p className="text-xs font-bold text-red-900">Motivo: <span className="font-medium italic">"{comanda.dados_garantia?.motivo_troca}"</span></p>
                         </div>
                       ) : isServico ? (
                         <div className="space-y-2 bg-purple-50 p-3 rounded border border-purple-100">
-                          <p className="text-xs font-bold text-purple-900">Cliente: <span className="font-medium">{comanda.dados_os?.cliente_nome || 'N/A'}</span></p>
-                          <p className="text-xs font-bold text-purple-900">Aparelho: <span className="font-medium">{comanda.dados_os?.modelo_aparelho || 'N/A'}</span></p>
+                          <p className="text-xs font-bold text-purple-900">Cliente: <span className="font-medium">{comanda.dados_os?.cliente_nome}</span></p>
+                          <p className="text-xs font-bold text-purple-900">Aparelho: <span className="font-medium">{comanda.dados_os?.modelo_aparelho}</span></p>
                           <p className="text-xs font-bold text-purple-900 mt-1 pt-1 border-t border-purple-200">
                             Serviço / Defeito Resolvido: <br/>
-                            <span className="font-medium italic text-gray-700">&quot;{comanda.dados_os?.relato_defeito || 'Sem relato detalhado'}&quot;</span>
+                            <span className="font-medium italic text-gray-700">"{comanda.dados_os?.relato_defeito}"</span>
                           </p>
                         </div>
                       ) : (
