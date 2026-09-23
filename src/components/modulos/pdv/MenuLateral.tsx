@@ -50,6 +50,13 @@ const ROTAS_SISTEMA: RotaMenu[] = [
     perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'],
   },
   {
+    nome: 'Central de Sugestões',
+    caminho: '/sugestoes',
+    icone: '💡',
+    // Permitido a TODOS os perfis operacionais
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'],
+  },
+  {
     nome: 'Painel Vendedor',
     caminho: '/vendedor',
     icone: '📈',
