@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
+import ModalNovoProduto from '@/components/modulos/estoque/ModalNovoProduto';
 
-// Tipagem baseada no espelhamento do Bling ERP
 interface ProdutoEstoque {
   id: string;
   sku: string;
@@ -21,9 +21,11 @@ export default function WorkspaceEstoque() {
   const [produtos, setProdutos] = useState<ProdutoEstoque[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  
+  // Estado de controle do Modal
+  const [modalAberto, setModalAberto] = useState(false);
 
   useEffect(() => {
-    // Consulta reativa aplicando Offline-First nativo do Firestore
     const q = query(collection(bancoDeDados, 'produtos'), orderBy('nome', 'asc'));
 
     const desinscrever = onSnapshot(
@@ -49,7 +51,6 @@ export default function WorkspaceEstoque() {
         setErro(null);
       },
       (erroFirebase) => {
-        // Regra Anti-Silêncio: Exposição visual de falhas técnicas para o operador
         console.error('[ERRO LISTAGEM ESTOQUE]', erroFirebase);
         setErro('Falha ao carregar o catálogo de produtos. Verifique sua conexão com a internet ou contate o suporte técnico.');
         setCarregando(false);
@@ -62,7 +63,6 @@ export default function WorkspaceEstoque() {
   return (
     <div className="flex h-screen w-full flex-col bg-gray-100 p-8 font-sans overflow-hidden">
       
-      {/* Cabeçalho do Módulo */}
       <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-gray-900">Estoque e Catálogo</h1>
@@ -71,10 +71,12 @@ export default function WorkspaceEstoque() {
         <div className="flex gap-3">
           <button 
             className="flex items-center gap-2 rounded bg-white border border-gray-300 px-5 py-2.5 font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 active:scale-95"
+            title="Funcionalidade em construção"
           >
             <span>🔄</span> Sincronizar Bling
           </button>
           <button 
+            onClick={() => setModalAberto(true)}
             className="flex items-center gap-2 rounded bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-md transition hover:bg-indigo-700 hover:shadow-lg active:scale-95"
           >
             <span>➕</span> Novo Produto
@@ -82,14 +84,12 @@ export default function WorkspaceEstoque() {
         </div>
       </header>
 
-      {/* Tratamento Visual de Erros (Anti-Silêncio) */}
       {erro && (
         <div className="mb-6 w-full rounded-md border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-700 shadow-sm">
           ⚠️ {erro}
         </div>
       )}
 
-      {/* Workspace Tabela Data-Driven */}
       <div className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
         <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-4">
           <h2 className="text-lg font-bold text-gray-700">Produtos Cadastrados</h2>
@@ -175,6 +175,9 @@ export default function WorkspaceEstoque() {
           </table>
         </div>
       </div>
+
+      {/* Renderização do Modal Controlado pelo Estado */}
+      <ModalNovoProduto aberto={modalAberto} aoFechar={() => setModalAberto(false)} />
     </div>
   );
 }
