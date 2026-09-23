@@ -4,15 +4,18 @@ import { useEffect, useState } from 'react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useComandaStore, ProdutoComanda } from '@/store/useComandaStore';
+import ModalNovaGarantia from '@/components/modulos/pdv/ModalNovaGarantia';
 
 export default function PdvWorkspace() {
   const { adicionarItem } = useComandaStore();
   const [produtos, setProdutos] = useState<ProdutoComanda[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  
+  // Estado para o Modal de Garantia
+  const [modalGarantiaAberto, setModalGarantiaAberto] = useState(false);
 
   useEffect(() => {
-    // Busca na coleção 'produtos' ordenada por nome. O onSnapshot garante Reatividade e Offline-First
     const q = query(collection(bancoDeDados, 'produtos'), orderBy('nome', 'asc'));
 
     const desinscrever = onSnapshot(
@@ -22,7 +25,7 @@ export default function PdvWorkspace() {
           id: doc.id,
           nome: doc.data().nome,
           preco: doc.data().preco,
-          quantidade: 0, // Inicia zero na vitrine
+          quantidade: 0,
         })) as ProdutoComanda[];
         
         setProdutos(produtosData);
@@ -40,27 +43,34 @@ export default function PdvWorkspace() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col font-sans">
+    <div className="flex h-full flex-col font-sans relative">
       
-      {/* Cabeçalho Color-Coded: Verde para Venda Expressa */}
-      <header className="mb-6 flex items-center justify-between rounded-lg border border-green-200 bg-green-50 p-4">
-        <div>
-          <h1 className="text-2xl font-bold text-green-800">Venda Expressa</h1>
-          <p className="text-sm text-green-600">Pronta Entrega / Balcão</p>
+      <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-lg border border-green-200 bg-green-50 p-4">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl shadow-sm">
+            ⚡
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-green-800">Venda Expressa</h1>
+            <p className="text-sm text-green-600">Pronta Entrega / Balcão</p>
+          </div>
         </div>
-        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100 text-xl shadow-sm">
-          ⚡
-        </div>
+        
+        {/* Botão da 4ª Máquina de Estado */}
+        <button 
+          onClick={() => setModalGarantiaAberto(true)}
+          className="flex items-center gap-2 rounded bg-red-100 border border-red-200 px-4 py-2 font-bold text-red-700 transition hover:bg-red-200 active:scale-95"
+        >
+          <span>🔄</span> Registrar Garantia / Troca
+        </button>
       </header>
 
-      {/* Regra Anti-Silêncio: Exibição explícita do erro para o vendedor */}
       {erro && (
         <div className="mb-6 rounded-md border-l-4 border-red-500 bg-red-50 p-4 text-sm font-medium text-red-700">
           {erro}
         </div>
       )}
 
-      {/* Grid de Produtos Data-Driven */}
       {carregando ? (
         <div className="flex h-64 w-full items-center justify-center">
           <div className="flex flex-col items-center gap-3">
@@ -69,7 +79,6 @@ export default function PdvWorkspace() {
           </div>
         </div>
       ) : produtos.length === 0 && !erro ? (
-        // Empty State Elegante
         <div className="flex h-64 w-full flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-6 text-center">
           <span className="mb-4 text-4xl">📦</span>
           <h3 className="text-lg font-bold text-gray-700">Estoque Vazio</h3>
@@ -103,6 +112,9 @@ export default function PdvWorkspace() {
           ))}
         </div>
       )}
+
+      {/* Renderização do Modal de Garantia */}
+      <ModalNovaGarantia aberto={modalGarantiaAberto} aoFechar={() => setModalGarantiaAberto(false)} />
     </div>
   );
 }
