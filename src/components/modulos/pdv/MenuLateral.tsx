@@ -44,6 +44,12 @@ const ROTAS_SISTEMA: RotaMenu[] = [
     perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'],
   },
   {
+    nome: 'Métricas Globais',
+    caminho: '/metricas',
+    icone: '📊',
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'],
+  },
+  {
     nome: 'Gestão de Equipe',
     caminho: '/equipe',
     icone: '👥',
@@ -53,7 +59,6 @@ const ROTAS_SISTEMA: RotaMenu[] = [
     nome: 'Central de Sugestões',
     caminho: '/sugestoes',
     icone: '💡',
-    // Permitido a TODOS os perfis operacionais
     perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'],
   },
   {
