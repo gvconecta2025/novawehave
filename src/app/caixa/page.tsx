@@ -16,6 +16,13 @@ interface ComandaPendente {
     motivo_troca: string;
     acao_imediata: string;
   };
+  dados_os?: {
+    cliente_nome: string;
+    telefone: string;
+    modelo_aparelho: string;
+    relato_defeito: string;
+    tecnico_id: string | null;
+  };
   auditoria: {
     criado_por_nome: string;
     criado_em: any;
@@ -28,10 +35,10 @@ export default function PainelCaixa() {
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    // Usamos o operador 'in' para escutar Vendas e Estornos simultaneamente
+    // Escutando as 3 naturezas operacionais fiscais simultaneamente (Venda, Estorno, Serviço)
     const q = query(
       collection(bancoDeDados, 'comandas'),
-      where('status_atual', 'in', ['Aguardando Caixa', 'Aguardando Estorno Caixa'])
+      where('status_atual', 'in', ['Aguardando Caixa', 'Aguardando Estorno Caixa', 'Aguardando NFS-e'])
     );
 
     const desinscrever = onSnapshot(
@@ -42,11 +49,11 @@ export default function PainelCaixa() {
           ...doc.data(),
         })) as ComandaPendente[];
 
-        // Ordenação em memória (KISS) para evitar a necessidade de criar índices compostos complexos no Firestore
+        // Ordenação em memória (FIFO) para evitar bloqueio de índices compostos
         dados.sort((a, b) => {
           const tempoA = a.auditoria?.criado_em?.toMillis() || 0;
           const tempoB = b.auditoria?.criado_em?.toMillis() || 0;
-          return tempoA - tempoB; // FIFO (Primeiro a entrar, primeiro a sair)
+          return tempoA - tempoB; 
         });
 
         setComandas(dados);
@@ -67,9 +74,10 @@ export default function PainelCaixa() {
       
       <header className="mb-8">
         <h1 className="text-3xl font-black text-gray-900">Painel Caixa & Financeiro</h1>
-        <p className="text-gray-500 mt-1">Fila Operacional - Emissão de NFe e Notas de Devolução (Bling)</p>
+        <p className="text-gray-500 mt-1">Fila Operacional - Emissão de NFe, NFS-e e Notas de Devolução (Bling)</p>
       </header>
 
+      {/* Regra Anti-Silêncio */}
       {erro && (
         <div className="mb-4 w-full rounded border-l-4 border-red-500 bg-red-100 p-4 font-semibold text-red-700 shadow-sm">
           {erro}
@@ -79,7 +87,7 @@ export default function PainelCaixa() {
       <div className="flex-1 overflow-x-auto rounded-xl bg-white p-6 shadow-inner border border-gray-200 flex flex-col">
         <div className="flex items-center justify-between mb-6 border-b pb-4">
           <h2 className="text-xl font-bold text-gray-800">Operações Pendentes</h2>
-          <span className="rounded bg-gray-800 px-3 py-1 text-sm font-bold text-white">
+          <span className="rounded bg-gray-800 px-3 py-1 text-sm font-bold text-white shadow-sm">
             {comandas.length} na Fila
           </span>
         </div>
@@ -98,7 +106,9 @@ export default function PainelCaixa() {
           ) : (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start">
               {comandas.map((comanda) => {
+                // Identificadores de Fluxo (Color-Coded Logic)
                 const isEstorno = comanda.status_atual === 'Aguardando Estorno Caixa';
+                const isServico = comanda.status_atual === 'Aguardando NFS-e';
 
                 return (
                   <div 
@@ -106,10 +116,12 @@ export default function PainelCaixa() {
                     className="flex flex-col rounded-xl border bg-white shadow-md transition-transform hover:-translate-y-1 overflow-hidden"
                     style={{ borderColor: comanda.cor_hexadecimal }}
                   >
+                    {/* Cabeçalho do Card */}
                     <div className="px-4 py-3 text-white" style={{ backgroundColor: comanda.cor_hexadecimal }}>
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-xs font-black uppercase tracking-wider">{comanda.fluxo_operacional}</span>
                         {isEstorno && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-bold uppercase">Urgente</span>}
+                        {isServico && <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-bold uppercase">Serviço</span>}
                       </div>
                       <div className="text-2xl font-black">
                         {isEstorno ? 'DEVOLUÇÃO' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(comanda.valor_total)}
@@ -118,15 +130,27 @@ export default function PainelCaixa() {
 
                     <div className="p-4 flex-1">
                       <div className="mb-4 border-b border-gray-100 pb-2">
-                        <p className="text-xs text-gray-400 font-semibold uppercase">Operador</p>
+                        <p className="text-xs text-gray-400 font-semibold uppercase">
+                          {isServico ? 'Técnico Responsável' : 'Operador / Vendedor'}
+                        </p>
                         <p className="text-sm text-gray-800 font-bold">{comanda.auditoria.criado_por_nome}</p>
                       </div>
                       
+                      {/* Corpo Condicional de Acordo com a Máquina de Estado */}
                       {isEstorno ? (
                         <div className="space-y-2 bg-red-50 p-2 rounded border border-red-100">
                           <p className="text-xs font-bold text-red-900">Produto: <span className="font-medium">{comanda.dados_garantia?.produto_defeito}</span></p>
                           <p className="text-xs font-bold text-red-900">Ação: <span className="font-medium">{comanda.dados_garantia?.acao_imediata}</span></p>
                           <p className="text-xs font-bold text-red-900">Motivo: <span className="font-medium italic">"{comanda.dados_garantia?.motivo_troca}"</span></p>
+                        </div>
+                      ) : isServico ? (
+                        <div className="space-y-2 bg-purple-50 p-3 rounded border border-purple-100">
+                          <p className="text-xs font-bold text-purple-900">Cliente: <span className="font-medium">{comanda.dados_os?.cliente_nome}</span></p>
+                          <p className="text-xs font-bold text-purple-900">Aparelho: <span className="font-medium">{comanda.dados_os?.modelo_aparelho}</span></p>
+                          <p className="text-xs font-bold text-purple-900 mt-1 pt-1 border-t border-purple-200">
+                            Serviço / Defeito Resolvido: <br/>
+                            <span className="font-medium italic text-gray-700">"{comanda.dados_os?.relato_defeito}"</span>
+                          </p>
                         </div>
                       ) : (
                         <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
@@ -139,14 +163,17 @@ export default function PainelCaixa() {
                       )}
                     </div>
 
+                    {/* Botão de Ação Fiscal (Wrapper) */}
                     <div className="p-4 bg-gray-50 border-t border-gray-100">
                       <button 
                         className={`w-full flex items-center justify-center gap-2 rounded py-3 text-sm font-bold text-white transition shadow-sm ${
-                          isEstorno ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
+                          isEstorno ? 'bg-red-600 hover:bg-red-700' : 
+                          isServico ? 'bg-purple-600 hover:bg-purple-700' : 
+                          'bg-blue-600 hover:bg-blue-700'
                         }`}
                       >
                         <span>{isEstorno ? '⚠️' : '🧾'}</span> 
-                        {isEstorno ? 'Processar Reversa' : 'Processar NFe'}
+                        {isEstorno ? 'Processar Reversa' : isServico ? 'Emitir NFS-e (Serviço)' : 'Processar NFe'}
                       </button>
                     </div>
                   </div>
