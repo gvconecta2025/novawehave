@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 
 interface ModalFechamentoProps {
@@ -18,10 +18,6 @@ interface ComandaFechamento {
     troco: number;
   };
   valor_total: number;
-  auditoria: {
-    criado_em: any;
-    faturado_em?: any;
-  };
 }
 
 export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoProps) {
@@ -32,38 +28,30 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
   useEffect(() => {
     if (!aberto) return;
 
+    // Filtra todas as comandas criadas desde as 00:00 do dia atual
     const inicioDoDia = new Date();
     inicioDoDia.setHours(0, 0, 0, 0);
-    const inicioDoDiaMillis = inicioDoDia.getTime();
 
     const q = query(
       collection(bancoDeDados, 'comandas'),
-      where('status_atual', '==', 'Faturado/Concluído')
+      where('auditoria.criado_em', '>=', Timestamp.fromDate(inicioDoDia))
     );
 
     const desinscrever = onSnapshot(
       q,
       (snapshot) => {
-        const dados = snapshot.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        })) as ComandaFechamento[];
+        const dados = snapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() })) as ComandaFechamento[];
         
-        // BLINDAGEM DE FILTRO: Fallbacks seguros e validação de existência da função toMillis
-        const faturadosHoje = dados.filter(c => {
-          const timestampReferencia = c.auditoria?.faturado_em || c.auditoria?.criado_em;
-          if (!timestampReferencia || typeof timestampReferencia.toMillis !== 'function') return false;
-          
-          return timestampReferencia.toMillis() >= inicioDoDiaMillis;
-        });
+        // Mantém apenas o que já foi faturado
+        const faturados = dados.filter(c => c.status_atual === 'Faturado/Concluído');
         
-        setComandasHoje(faturadosHoje);
+        setComandasHoje(faturados);
         setCarregando(false);
-        setErro(null); 
       },
-      (err: any) => {
+      (err) => {
         console.error('[ERRO FECHAMENTO CAIXA]', err);
-        setErro(`Falha no Firestore [${err.code || 'Erro Técnico'}]: ${err.message}`);
+        setErro('Falha ao consolidar o faturamento. Verifique a rede.');
         setCarregando(false);
       }
     );
@@ -73,9 +61,11 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
 
   if (!aberto) return null;
 
+  // Consolidação Financeira em Memória (KISS)
   const totais = comandasHoje.reduce(
     (acc, comanda) => {
-      const valor = comanda.pagamento ? (comanda.pagamento.valor_recebido - comanda.pagamento.troco) : (Number(comanda.valor_total) || 0);
+      // Usa o valor do objeto pagamento, ou o valor_total se não houver (ex: assinaturas antigas)
+      const valor = comanda.pagamento ? (comanda.pagamento.valor_recebido - comanda.pagamento.troco) : comanda.valor_total;
       const metodo = comanda.pagamento?.metodo || 'Outros';
 
       acc.total += valor;
@@ -103,11 +93,7 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
           </button>
         </div>
 
-        {erro && (
-          <div className="bg-red-50 p-4 border-b border-red-200 text-sm font-medium text-red-800 shadow-inner break-words">
-            ⚠️ <strong>Diagnóstico:</strong> {erro}
-          </div>
-        )}
+        {erro && <div className="bg-red-50 p-4 border-b border-red-200 text-sm font-semibold text-red-700">⚠️ {erro}</div>}
 
         <div className="p-6">
           {carregando ? (
@@ -117,39 +103,38 @@ export default function ModalFechamento({ aberto, aoFechar }: ModalFechamentoPro
           ) : (
             <div className="space-y-6">
               
-              <div className="rounded-xl bg-gray-50 border border-gray-200 p-5 text-center shadow-sm">
+              <div className="rounded-xl bg-gray-50 border border-gray-200 p-5 text-center">
                 <p className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Faturamento Bruto do Dia</p>
                 <p className="text-4xl font-black text-gray-900">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.total)}
                 </p>
-                <p className="text-xs font-semibold text-gray-400 mt-2">{comandasHoje.length} operações concluídas hoje</p>
+                <p className="text-xs font-semibold text-gray-400 mt-2">{comandasHoje.length} operações concluídas</p>
               </div>
 
               <div>
                 <h3 className="text-sm font-bold text-gray-800 mb-3 border-b pb-2">Consolidação por Método</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="rounded-lg border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
+                  <div className="rounded border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
                     <span className="text-xs text-gray-500 font-bold mb-1">Total Pix</span>
                     <span className="text-lg font-black text-green-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.pix)}</span>
                   </div>
-                  <div className="rounded-lg border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
+                  <div className="rounded border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
                     <span className="text-xs text-gray-500 font-bold mb-1">Total Dinheiro</span>
                     <span className="text-lg font-black text-amber-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.dinheiro)}</span>
                   </div>
-                  <div className="rounded-lg border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
+                  <div className="rounded border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
                     <span className="text-xs text-gray-500 font-bold mb-1">Cartão Crédito</span>
                     <span className="text-lg font-black text-blue-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.credito)}</span>
                   </div>
-                  <div className="rounded-lg border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
+                  <div className="rounded border border-gray-100 bg-white p-3 flex flex-col items-center justify-center shadow-sm">
                     <span className="text-xs text-gray-500 font-bold mb-1">Cartão Débito</span>
                     <span className="text-lg font-black text-blue-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totais.debito)}</span>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-amber-50 p-4 rounded-lg text-xs text-amber-900 font-medium border border-amber-200">
-                <strong className="block mb-1 text-amber-900">Lembrete de Fechamento:</strong> 
-                Conte o valor físico na gaveta (Dinheiro) e confira os relatórios das máquinas de cartão com a tabela acima antes de encerrar as suas atividades operacionais.
+              <div className="bg-amber-50 p-3 rounded text-xs text-amber-800 font-medium border border-amber-200">
+                Lembrete: Conte o valor físico na gaveta (Dinheiro) e confira com a máquina de cartão antes de encerrar as suas atividades.
               </div>
             </div>
           )}
