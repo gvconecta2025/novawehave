@@ -54,6 +54,12 @@ const ROTAS_SISTEMA: RotaMenu[] = [
     caminho: '/vendedor',
     icone: '📈',
     perfisPermitidos: ['Master', 'Supervisor', 'Vendedores', 'Folguista'],
+  },
+  {
+    nome: 'Configurações Globais',
+    caminho: '/configuracoes',
+    icone: '⚙️',
+    perfisPermitidos: ['Master', 'Admin/Dev'],
   }
 ];
 
