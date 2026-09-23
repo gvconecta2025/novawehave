@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 
 interface ProdutoVitrine {
@@ -11,46 +11,70 @@ interface ProdutoVitrine {
   saldo_estoque: number;
 }
 
+interface ConfiguracoesCMS {
+  whatsapp_loja: string;
+  banner_promocional_texto: string;
+  desconto_pix_percentual: number;
+}
+
 export default function HomeLoja() {
   const [produtos, setProdutos] = useState<ProdutoVitrine[]>([]);
+  const [configuracoes, setConfiguracoes] = useState<ConfiguracoesCMS>({
+    whatsapp_loja: '5533999999999', // Fallback seguro
+    banner_promocional_texto: 'Lançamentos Exclusivos - Tudo para proteger e potencializar o seu aparelho.',
+    desconto_pix_percentual: 10, // 10% padrão
+  });
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    // Busca os produtos e ordena alfabeticamente
-    const q = query(collection(bancoDeDados, 'produtos'), orderBy('nome', 'asc'));
-
-    const desinscrever = onSnapshot(
-      q,
+    // 1. Busca Reativa dos Produtos
+    const qProdutos = query(collection(bancoDeDados, 'produtos'), orderBy('nome', 'asc'));
+    const desinscreverProdutos = onSnapshot(
+      qProdutos,
       (snapshot) => {
-        const dados = snapshot.docs.map((doc) => ({
-          id: doc.id,
-          nome: doc.data().nome,
-          preco: doc.data().preco,
-          saldo_estoque: doc.data().saldo_estoque || 0,
+        const dados = snapshot.docs.map((d) => ({
+          id: d.id,
+          nome: d.data().nome,
+          preco: d.data().preco,
+          saldo_estoque: d.data().saldo_estoque || 0,
         })) as ProdutoVitrine[];
         
-        // Filtra em memória para exibir apenas produtos com estoque positivo (Regra de Negócio)
         const produtosEmEstoque = dados.filter(p => p.saldo_estoque > 0);
-        
         setProdutos(produtosEmEstoque);
         setCarregando(false);
-        setErro(null);
       },
-      (erroFirebase) => {
-        console.error('[ERRO VITRINE PÚBLICA]', erroFirebase);
-        setErro('Não foi possível carregar os produtos neste momento. Tente atualizar a página.');
+      (err) => {
+        console.error('[ERRO VITRINE PÚBLICA]', err);
+        setErro('Não foi possível carregar o catálogo neste momento. Tente atualizar a página.');
         setCarregando(false);
       }
     );
 
-    return () => desinscrever();
+    // 2. Busca Reativa do CMS (Data-Driven UI)
+    const desinscreverCMS = onSnapshot(
+      doc(bancoDeDados, 'configuracoes', 'geral'),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const dadosCMS = snapshot.data();
+          setConfiguracoes({
+            whatsapp_loja: dadosCMS.whatsapp_loja || '5533999999999',
+            banner_promocional_texto: dadosCMS.banner_promocional_texto || 'Lançamentos Exclusivos - Tudo para proteger o seu aparelho.',
+            desconto_pix_percentual: typeof dadosCMS.desconto_pix_percentual === 'number' ? dadosCMS.desconto_pix_percentual : 10,
+          });
+        }
+      }
+    );
+
+    return () => {
+      desinscreverProdutos();
+      desinscreverCMS();
+    };
   }, []);
 
-  // Ação 3: Omnichannel O2O - Redirecionamento para o Balcão via WhatsApp
+  // Omnichannel O2O com Variável Dinâmica do CMS
   const lidarComCompraO2O = (produto: ProdutoVitrine) => {
-    // Numero corporativo da loja (Placeholder)
-    const numeroLoja = '5533999999999';
+    const numeroLoja = configuracoes.whatsapp_loja;
     const precoFormatado = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco);
     
     const texto = `Olá We Have! 👋\n\nTenho interesse em comprar o produto:\n*${produto.nome}*\n\nVi no site por ${precoFormatado}. Como podemos fechar a compra?`;
@@ -62,10 +86,12 @@ export default function HomeLoja() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       
-      {/* Banner Promocional CMS (Hardcoded por enquanto, preparado para ser dinâmico) */}
+      {/* Banner Promocional CMS Dinâmico */}
       <div className="mb-12 flex h-48 w-full flex-col items-center justify-center rounded-2xl bg-gradient-to-r from-blue-700 to-indigo-800 p-6 text-center shadow-lg md:h-64">
-        <h2 className="mb-2 text-2xl font-black text-white sm:text-4xl">Lançamentos Exclusivos</h2>
-        <p className="text-sm font-medium text-blue-100 sm:text-lg">Tudo para proteger e potencializar o seu aparelho.</p>
+        <h2 className="mb-2 text-2xl font-black text-white sm:text-4xl">Novidades We Have</h2>
+        <p className="text-sm font-medium text-blue-100 sm:text-lg">
+          {configuracoes.banner_promocional_texto}
+        </p>
       </div>
 
       <div className="mb-6 flex items-center justify-between">
@@ -80,7 +106,6 @@ export default function HomeLoja() {
         </div>
       )}
 
-      {/* Grid de Produtos (Mobile: 1 col, Tablet: 2/3 cols, Desktop: 4 cols) */}
       {carregando ? (
         <div className="flex h-64 w-full flex-col items-center justify-center gap-4">
           <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
@@ -95,20 +120,17 @@ export default function HomeLoja() {
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {produtos.map((produto) => {
-            // Regras de Negócio Fictícias para Vitrine:
-            // - Desconto de 10% à vista.
-            // - Parcelamento em até 12x s/ juros sobre o preço cheio.
-            const precoAVista = produto.preco * 0.9;
+            // Regra Matemática injetada via CMS
+            const fatorDesconto = 1 - (configuracoes.desconto_pix_percentual / 100);
+            const precoAVista = produto.preco * fatorDesconto;
             const parcela = produto.preco / 12;
 
             return (
               <div key={produto.id} className="group flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-xl">
                 
-                {/* Foto Placeholder */}
                 <div className="relative flex aspect-square w-full items-center justify-center bg-gray-100 transition-colors group-hover:bg-gray-200">
                   <span className="text-6xl opacity-50 grayscale transition-transform group-hover:scale-110 group-hover:opacity-100">📱</span>
                   
-                  {/* Etiqueta de Escassez (Gatilho Mental) */}
                   {produto.saldo_estoque <= 3 && (
                     <span className="absolute left-3 top-3 rounded bg-red-600 px-2 py-1 text-xs font-black text-white shadow-md">
                       ÚLTIMAS {produto.saldo_estoque}
@@ -129,9 +151,14 @@ export default function HomeLoja() {
                       <p className="text-2xl font-black text-green-600">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(precoAVista)}
                       </p>
+                      {configuracoes.desconto_pix_percentual > 0 && (
+                        <span className="mb-1 rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">
+                          -{configuracoes.desconto_pix_percentual}% PIX
+                        </span>
+                      )}
                     </div>
                     <p className="mb-4 text-xs font-semibold text-gray-600">
-                      no PIX ou até 12x de {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela)}
+                      ou até 12x de {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parcela)}
                     </p>
                     
                     <button
