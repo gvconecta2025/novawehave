@@ -119,7 +119,8 @@ export default function WorkspaceMetricas() {
   return (
     <>
       <MenuLateral />
-      <div className="flex h-screen w-full flex-col bg-gray-50 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+      {/* PADRONIZAÇÃO: pl-20 (mobile) e md:pl-24 protegem o conteúdo da Sidebar */}
+      <div className="flex h-screen w-full flex-col bg-gray-50 p-6 pl-20 md:p-8 md:pl-24 font-sans overflow-hidden transition-all">
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
           <div>
             <h1 className="text-3xl font-black text-gray-900">Métricas Globais</h1>
