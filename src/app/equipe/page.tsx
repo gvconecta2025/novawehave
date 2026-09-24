@@ -1,138 +1,281 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, query, orderBy, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
-import { UsuarioApp } from '@/types/auth';
-import ModalNovoUsuario from '@/components/modulos/equipe/ModalNovoUsuario';
+import { useAuthStore } from '@/store/useAuthStore';
+import MenuLateral from '@/components/modulos/pdv/MenuLateral';
+import Link from 'next/link';
+import { PerfilRBAC } from '@/types/auth';
+
+interface MembroEquipe {
+  id: string; // Corresponde ao UID da Autenticação
+  nome_completo: string;
+  email: string;
+  perfil_rbac: PerfilRBAC;
+  acesso_liberado?: boolean;
+}
+
+const LISTA_PERFIS: PerfilRBAC[] = [
+  'Master', 
+  'Supervisor', 
+  'Admin/Dev', 
+  'Vendedores', 
+  'Folguista', 
+  'Caixa/Financeiro', 
+  'Técnicos Credenciados'
+];
 
 export default function WorkspaceEquipe() {
-  const [equipe, setEquipe] = useState<UsuarioApp[]>([]);
+  const { usuarioAuth, perfilRbac, carregando: authCarregando } = useAuthStore();
+  
+  const [membros, setMembros] = useState<MembroEquipe[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [modalAberto, setModalAberto] = useState(false);
+  const [sucesso, setSucesso] = useState<string | null>(null);
+
+  // AÇÃO 1: Barreira RBAC Estrita
+  const acessoPermitido = ['Master', 'Supervisor', 'Admin/Dev'].includes(perfilRbac || '');
 
   useEffect(() => {
-    // Escuta ativa da coleção de usuários ordenando alfabeticamente
+    if (authCarregando || !acessoPermitido) {
+      if (!authCarregando && !acessoPermitido) setCarregando(false);
+      return;
+    }
+
     const q = query(collection(bancoDeDados, 'usuarios'), orderBy('nome_completo', 'asc'));
 
     const desinscrever = onSnapshot(
       q,
       (snapshot) => {
-        // Filtra para remover usuários que sofreram soft-delete (deletado_em != null)
-        const dados = snapshot.docs
-          .filter(doc => !doc.data()?.auditoria?.deletado_em)
-          .map((doc) => ({
-            ...doc.data(),
-            id_usuario: doc.id,
-          })) as UsuarioApp[];
-          
-        setEquipe(dados);
+        const dados = snapshot.docs.map(doc => ({
+          id: doc.id,
+          nome_completo: doc.data().nome_completo || 'Sem Nome',
+          email: doc.data().email || 'Sem E-mail',
+          perfil_rbac: doc.data().perfil_rbac || 'Vendedores',
+          acesso_liberado: doc.data().acesso_liberado !== false, // Fallback true para contas legadas
+        })) as MembroEquipe[];
+        
+        setMembros(dados);
         setCarregando(false);
+        setErro(null);
       },
-      (erroFirebase) => {
-        console.error('[ERRO LISTAGEM EQUIPE]', erroFirebase);
-        setErro('Falha ao sincronizar o quadro de funcionários. Verifique a rede.');
+      (err: any) => {
+        console.error('[ERRO LISTAGEM EQUIPE]', err);
+        setErro(`Falha ao conectar com o banco de dados [${err.code}]: ${err.message}`);
         setCarregando(false);
       }
     );
 
     return () => desinscrever();
-  }, []);
+  }, [acessoPermitido, authCarregando]);
 
-  // Função auxiliar para determinar a cor do badge de acordo com o nível de privilégio (Color-Coded RBAC)
-  const obterCorBadge = (perfil: string) => {
-    if (['Master', 'Admin/Dev', 'Supervisor'].includes(perfil)) return 'bg-red-100 text-red-800 border-red-200';
-    if (['Caixa/Financeiro'].includes(perfil)) return 'bg-green-100 text-green-800 border-green-200';
-    if (['Técnicos Credenciados'].includes(perfil)) return 'bg-purple-100 text-purple-800 border-purple-200';
-    return 'bg-blue-100 text-blue-800 border-blue-200'; // Vendedores e Folguistas
+  // AÇÃO 2: Ação de Alterar Perfil
+  const lidarComAlteracaoPerfil = async (idUsuario: string, novoPerfil: string, nomeMembro: string) => {
+    if (!confirm(`Deseja alterar o perfil de ${nomeMembro} para ${novoPerfil}?`)) return;
+    
+    setErro(null);
+    setSucesso(null);
+
+    try {
+      const docRef = doc(bancoDeDados, 'usuarios', idUsuario);
+      await updateDoc(docRef, {
+        perfil_rbac: novoPerfil,
+        'auditoria.perfil_atualizado_em': serverTimestamp(),
+        'auditoria.perfil_atualizado_por': usuarioAuth?.uid
+      });
+      setSucesso(`✅ Perfil de ${nomeMembro} atualizado com sucesso para ${novoPerfil}.`);
+      setTimeout(() => setSucesso(null), 4000);
+    } catch (err: any) {
+      console.error('[ERRO ALTERAR PERFIL]', err);
+      setErro(`Falha ao alterar perfil de ${nomeMembro}: ${err.message}`);
+    }
   };
 
-  return (
-    <div className="flex h-screen w-full flex-col bg-gray-100 p-8 font-sans overflow-hidden">
+  // AÇÃO 2: Ação de Bloquear/Liberar
+  const lidarComAlternanciaAcesso = async (idUsuario: string, statusAtual: boolean, nomeMembro: string) => {
+    const acaoTexto = statusAtual ? 'BLOQUEAR o acesso de' : 'LIBERAR o acesso de';
+    if (!confirm(`Deseja realmente ${acaoTexto} ${nomeMembro}?`)) return;
+
+    setErro(null);
+    setSucesso(null);
+
+    try {
+      const docRef = doc(bancoDeDados, 'usuarios', idUsuario);
+      await updateDoc(docRef, {
+        acesso_liberado: !statusAtual,
+        'auditoria.acesso_alterado_em': serverTimestamp(),
+        'auditoria.acesso_alterado_por': usuarioAuth?.uid
+      });
       
-      {/* Cabeçalho do Módulo */}
-      <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-gray-900">Gestão de Equipe</h1>
-          <p className="text-gray-500 mt-1">Controle de acessos, perfis (RBAC) e auditabilidade.</p>
-        </div>
-        <button 
-          onClick={() => setModalAberto(true)}
-          className="flex items-center gap-2 rounded bg-blue-900 px-6 py-3 font-bold text-white shadow-md transition hover:bg-blue-800 hover:shadow-lg active:scale-95"
-        >
-          <span>➕</span> Cadastrar Colaborador
-        </button>
-      </header>
+      const msg = !statusAtual ? `✅ Acesso liberado para ${nomeMembro}.` : `🔒 Acesso bloqueado para ${nomeMembro}.`;
+      setSucesso(msg);
+      setTimeout(() => setSucesso(null), 4000);
+    } catch (err: any) {
+      console.error('[ERRO ALTERAR ACESSO]', err);
+      setErro(`Falha ao alterar status de acesso de ${nomeMembro}: ${err.message}`);
+    }
+  };
 
-      {/* Regra Anti-Silêncio Local */}
-      {erro && (
-        <div className="mb-4 w-full rounded border-l-4 border-red-500 bg-red-100 p-4 font-semibold text-red-700 shadow-sm">
-          {erro}
-        </div>
-      )}
+  const obterCorPerfil = (perfil: string) => {
+    switch (perfil) {
+      case 'Master': return 'bg-gray-900 text-white';
+      case 'Admin/Dev': return 'bg-gray-700 text-gray-100';
+      case 'Supervisor': return 'bg-blue-100 text-blue-800 border border-blue-200';
+      case 'Vendedores': return 'bg-green-100 text-green-800 border border-green-200';
+      case 'Folguista': return 'bg-orange-100 text-orange-800 border border-orange-200';
+      case 'Caixa/Financeiro': return 'bg-purple-100 text-purple-800 border border-purple-200';
+      case 'Técnicos Credenciados': return 'bg-amber-100 text-amber-800 border border-amber-200';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
-      {/* Tabela Data-Driven (Data Grid) */}
-      <div className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-gray-600">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-700 border-b border-gray-200">
-              <tr>
-                <th scope="col" className="px-6 py-4">Nome do Colaborador</th>
-                <th scope="col" className="px-6 py-4">E-mail Corporativo</th>
-                <th scope="col" className="px-6 py-4">Perfil de Acesso (RBAC)</th>
-                <th scope="col" className="px-6 py-4 text-center">Status</th>
-                <th scope="col" className="px-6 py-4 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {carregando ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-medium">
-                    Carregando equipe...
-                  </td>
-                </tr>
-              ) : equipe.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-400 font-medium">
-                    Nenhum colaborador encontrado no banco de dados.
-                  </td>
-                </tr>
-              ) : (
-                equipe.map((usuario) => (
-                  <tr key={usuario.id_usuario} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-gray-900">
-                      {usuario.nome_completo}
-                    </td>
-                    <td className="px-6 py-4">
-                      {usuario.email}
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold ${obterCorBadge(usuario.perfil_rbac)}`}>
-                        {usuario.perfil_rbac}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="inline-flex items-center gap-1.5 rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                        Ativo
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button className="text-gray-400 hover:text-blue-600 font-medium text-xs transition-colors" title="Apenas visualização nesta etapa">
-                        Editar
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+  if (authCarregando) {
+    return <div className="flex h-screen items-center justify-center bg-gray-50"><div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div></div>;
+  }
+
+  if (!acessoPermitido) {
+    return (
+      <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-100 p-8 font-sans">
+        <div className="flex max-w-md flex-col items-center justify-center rounded-2xl border border-red-200 bg-white p-10 text-center shadow-2xl">
+          <span className="mb-4 text-6xl">⛔</span>
+          <h1 className="mb-2 text-2xl font-black text-gray-900">Acesso Restrito</h1>
+          <p className="mb-6 text-sm text-gray-500">
+            O seu perfil ({perfilRbac}) não possui autorização executiva para gerir a equipa.
+          </p>
+          <Link href="/pdv" className="rounded bg-blue-600 px-6 py-2.5 font-bold text-white transition hover:bg-blue-700">Voltar ao PDV</Link>
         </div>
       </div>
+    );
+  }
 
-      {/* Renderização do Modal */}
-      <ModalNovoUsuario aberto={modalAberto} aoFechar={() => setModalAberto(false)} />
-    </div>
+  return (
+    <>
+      <MenuLateral />
+      {/* Injeção de UI: App Shell Wrapper */}
+      <div className="flex h-screen w-full flex-col bg-gray-50 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+        
+        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
+          <div>
+            <h1 className="text-3xl font-black text-gray-900">Gestão de Equipe e Acessos</h1>
+            <p className="text-gray-500 mt-1">Controle de perfis (RBAC), funções operacionais e bloqueio de turnos.</p>
+          </div>
+        </header>
+
+        {/* Lei Anti-Silêncio: Tratamento de Erros e Sucessos Visual */}
+        {erro && (
+          <div className="mb-6 w-full rounded border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm break-words">
+            ⚠️ {erro}
+          </div>
+        )}
+        
+        {sucesso && (
+          <div className="mb-6 w-full rounded border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm animate-pulse-short">
+            {sucesso}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
+          <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-4">
+            <h2 className="text-lg font-bold text-gray-800">Colaboradores Cadastrados</h2>
+            <span className="rounded bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
+              {membros.length} Ativos
+            </span>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-gray-600">
+              <thead className="bg-white text-xs uppercase text-gray-500 border-b border-gray-200">
+                <tr>
+                  <th scope="col" className="px-6 py-4 font-bold">Colaborador</th>
+                  <th scope="col" className="px-6 py-4 font-bold">Perfil / Cargo (RBAC)</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-center">Status do Acesso</th>
+                  <th scope="col" className="px-6 py-4 font-bold text-right">Ação Rápida (Bloqueio)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {carregando ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+                        <p className="text-sm font-medium text-gray-500">A carregar registos da equipa...</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : membros.length === 0 && !erro ? (
+                  <tr>
+                    <td colSpan={4} className="px-6 py-12 text-center text-gray-400 font-medium">
+                      Nenhum colaborador encontrado na base de dados.
+                    </td>
+                  </tr>
+                ) : (
+                  membros.map((membro) => {
+                    const isMe = membro.id === usuarioAuth?.uid; // AÇÃO 2: Regra de Imunidade
+
+                    return (
+                      <tr key={membro.id} className={`transition-colors ${isMe ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}>
+                        <td className="px-6 py-4">
+                          <p className="font-bold text-gray-900 flex items-center gap-2">
+                            {membro.nome_completo}
+                            {isMe && <span className="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded-full uppercase tracking-wider">Você</span>}
+                          </p>
+                          <p className="text-xs text-gray-500 mt-0.5">{membro.email}</p>
+                        </td>
+                        
+                        <td className="px-6 py-4">
+                          <select
+                            disabled={isMe}
+                            value={membro.perfil_rbac}
+                            onChange={(e) => lidarComAlteracaoPerfil(membro.id, e.target.value, membro.nome_completo)}
+                            title={isMe ? "Você não pode alterar o próprio perfil." : "Alterar perfil de acesso"}
+                            className={`px-3 py-1.5 rounded-md text-xs font-bold font-sans outline-none transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-80 appearance-none ${obterCorPerfil(membro.perfil_rbac)}`}
+                          >
+                            {LISTA_PERFIS.map(perfil => (
+                              <option key={perfil} value={perfil} className="bg-white text-gray-900">{perfil}</option>
+                            ))}
+                          </select>
+                        </td>
+
+                        <td className="px-6 py-4 text-center">
+                          {membro.acesso_liberado ? (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-semibold text-green-700 border border-green-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+                              Liberado
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 border border-red-200">
+                              <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse"></span>
+                              Bloqueado
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            disabled={isMe}
+                            onClick={() => lidarComAlternanciaAcesso(membro.id, membro.acesso_liberado || false, membro.nome_completo)}
+                            title={isMe ? "Regra de Imunidade: Não pode bloquear-se a si mesmo." : "Alternar acesso"}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 ${
+                              membro.acesso_liberado ? 'bg-green-500' : 'bg-red-500'
+                            }`}
+                          >
+                            <span
+                              className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                                membro.acesso_liberado ? 'translate-x-5' : 'translate-x-0'
+                              }`}
+                            />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
