@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -14,144 +13,99 @@ interface RotaMenu {
 }
 
 const ROTAS_SISTEMA: RotaMenu[] = [
-  { 
-    nome: 'Ponto de Venda', 
-    caminho: '/pdv', 
-    icone: '🛒', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] 
-  },
-  { 
-    nome: 'Assinaturas VIP', 
-    caminho: '/assinatura', 
-    icone: '🌟', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] 
-  },
-  { 
-    nome: 'Assistência Técnica', 
-    caminho: '/assistencia', 
-    icone: '🔧', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Técnicos Credenciados'] 
-  },
-  { 
-    nome: 'Painel Caixa', 
-    caminho: '/caixa', 
-    icone: '💰', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Caixa/Financeiro'] 
-  },
-  { 
-    nome: 'Estoque', 
-    caminho: '/estoque', 
-    icone: '📦', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] 
-  },
-  { 
-    nome: 'Métricas Globais', 
-    caminho: '/metricas', 
-    icone: '📊', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] 
-  },
-  { 
-    nome: 'Gestão de Equipe', 
-    caminho: '/equipe', 
-    icone: '👥', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] 
-  },
-  { 
-    nome: 'Central de Sugestões', 
-    caminho: '/sugestoes', 
-    icone: '💡', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'] 
-  },
-  { 
-    nome: 'Painel Vendedor', 
-    caminho: '/vendedor', 
-    icone: '📈', 
-    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] 
-  },
-  { 
-    nome: 'Configurações Globais', 
-    caminho: '/configuracoes', 
-    icone: '⚙️', 
-    perfisPermitidos: ['Master', 'Admin/Dev'] 
-  }
+  { nome: 'Ponto de Venda', caminho: '/pdv', icone: '🛒', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
+  { nome: 'Assinaturas VIP', caminho: '/assinatura', icone: '🌟', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
+  { nome: 'Assistência Técnica', caminho: '/assistencia', icone: '🔧', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Técnicos Credenciados'] },
+  { nome: 'Painel Caixa', caminho: '/caixa', icone: '💰', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Caixa/Financeiro'] },
+  { nome: 'Estoque', caminho: '/estoque', icone: '📦', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
+  { nome: 'Métricas Globais', caminho: '/metricas', icone: '📊', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
+  { nome: 'Gestão de Equipe', caminho: '/equipe', icone: '👥', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
+  { nome: 'Central de Sugestões', caminho: '/sugestoes', icone: '💡', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'] },
+  { nome: 'Painel Vendedor', caminho: '/vendedor', icone: '📈', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
+  { nome: 'Configurações Globais', caminho: '/configuracoes', icone: '⚙️', perfisPermitidos: ['Master', 'Admin/Dev'] }
 ];
 
 export default function MenuLateral() {
-  const { perfilRbac, usuarioDb, fazerLogout } = useAuthStore();
+  const { usuarioAuth, perfilRbac, usuarioDb, fazerLogout } = useAuthStore();
   const pathname = usePathname();
-  const [aberto, setAberto] = useState(false);
 
-  if (!perfilRbac) return null;
+  // Bloqueio Logado: Nunca renderiza se o usuário não estiver autenticado e validado
+  if (!usuarioAuth || !perfilRbac) return null;
 
   const rotasAutorizadas = ROTAS_SISTEMA.filter((rota) => 
     rota.perfisPermitidos.includes(perfilRbac)
   );
 
   return (
-    <>
-      <button 
-        onClick={() => setAberto(true)}
-        className="fixed top-5 left-5 z-40 flex items-center justify-center rounded-lg bg-gray-900 p-3 text-white shadow-lg transition-transform hover:scale-105 hover:bg-black focus:outline-none"
-        title="Abrir Menu"
-      >
-        <span className="text-xl">☰</span>
-      </button>
-
-      {aberto && (
-        <div 
-          className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
-          onClick={() => setAberto(false)}
-        />
-      )}
-
-      <nav 
-        className={`fixed top-0 left-0 h-full w-72 bg-zinc-900 text-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col justify-between ${
-          aberto ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="flex flex-col">
-          <div className="flex h-20 items-center justify-between border-b border-zinc-800 bg-black p-4">
-            <h1 className="text-xl font-black tracking-widest text-blue-500 ml-2">WE<span className="text-white">HAVE</span></h1>
-            <button onClick={() => setAberto(false)} className="text-gray-400 hover:text-white text-2xl pr-2">&times;</button>
+    <nav className="fixed left-0 top-0 h-full z-50 bg-zinc-900 text-white shadow-2xl transition-all duration-300 w-16 hover:w-64 group flex flex-col justify-between overflow-hidden whitespace-nowrap border-r border-zinc-800">
+      
+      <div className="flex flex-col flex-1 overflow-hidden">
+        {/* Topo / Logo */}
+        <div className="flex h-20 items-center justify-start border-b border-zinc-800 bg-black px-4 shrink-0 transition-colors group-hover:bg-zinc-950">
+          <div className="flex w-8 justify-center shrink-0">
+            <span className="text-xl font-black text-blue-500 group-hover:hidden">W</span>
+            <span className="text-xl font-black text-blue-500 hidden group-hover:block transition-opacity duration-300">W<span className="text-white">H</span></span>
           </div>
-          
-          <ul className="flex flex-col gap-2 p-4 overflow-y-auto max-h-[calc(100vh-200px)] custom-scrollbar">
-            {rotasAutorizadas.map((rota) => {
-              const isActive = pathname.startsWith(rota.caminho);
-              return (
-                <li key={rota.caminho}>
-                  <Link 
-                    href={rota.caminho}
-                    onClick={() => setAberto(false)}
-                    className={`flex items-center gap-3 rounded-md px-4 py-3 transition-colors duration-200 ${
-                      isActive ? 'bg-blue-600 text-white font-bold shadow-md' : 'hover:bg-zinc-800 text-zinc-300 font-medium'
-                    }`}
-                  >
-                    <span className="text-xl">{rota.icone}</span>
-                    <span className="text-sm">{rota.nome}</span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
+          <span className="ml-3 text-lg font-black tracking-widest text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            WE<span className="text-white">HAVE</span>
+          </span>
         </div>
+        
+        {/* Navegação */}
+        <ul className="flex flex-col gap-2 py-4 px-2 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1">
+          {rotasAutorizadas.map((rota) => {
+            const isActive = pathname.startsWith(rota.caminho);
+            return (
+              <li key={rota.caminho}>
+                <Link 
+                  href={rota.caminho}
+                  className={`flex items-center rounded-lg p-3 transition-all duration-200 ${
+                    isActive 
+                      ? 'bg-blue-600 text-white shadow-md' 
+                      : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                  }`}
+                  title={rota.nome}
+                >
+                  <span className="text-xl w-6 text-center shrink-0">{rota.icone}</span>
+                  <span className="ml-4 text-sm font-semibold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    {rota.nome}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
 
-        <div className="border-t border-zinc-800 p-5 bg-black/20">
-          <div className="mb-4">
-            <p className="text-xs text-zinc-400 uppercase tracking-wider font-bold mb-1">Operador Logado</p>
-            <p className="text-sm font-bold text-white line-clamp-1">{usuarioDb?.nome_completo || 'Carregando...'}</p>
-            <span className="mt-1.5 inline-block rounded border border-blue-900/50 bg-blue-900/30 px-2 py-1 text-xs font-bold text-blue-400 shadow-sm">
+      {/* Base / Usuário e Logout */}
+      <div className="border-t border-zinc-800 bg-black/20 shrink-0">
+        <div className="p-3 flex items-center transition-all duration-300 group-hover:px-4 group-hover:pt-4 group-hover:pb-2">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white shadow-inner">
+            {usuarioDb?.nome_completo?.charAt(0).toUpperCase() || 'U'}
+          </div>
+          <div className="ml-3 flex flex-col opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <p className="text-sm font-bold text-white truncate max-w-[150px]">
+              {usuarioDb?.nome_completo || 'Operador'}
+            </p>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400">
               {perfilRbac}
             </span>
           </div>
+        </div>
+
+        <div className="px-2 pb-3 pt-1 group-hover:px-3">
           <button 
-            onClick={() => { fazerLogout(); setAberto(false); }}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-red-900/30 border border-red-900/50 px-4 py-2.5 text-sm font-bold text-red-400 hover:bg-red-900/60 transition-colors active:scale-95"
+            onClick={fazerLogout}
+            className="flex w-full items-center rounded-lg p-3 text-red-400 hover:bg-red-900/30 hover:text-red-300 transition-colors"
+            title="Encerrar Sessão"
           >
-            <span>🚪</span> Encerrar Sessão
+            <span className="text-xl w-6 text-center shrink-0">🚪</span>
+            <span className="ml-4 text-sm font-bold opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              Encerrar Sessão
+            </span>
           </button>
         </div>
-      </nav>
-    </>
+      </div>
+    </nav>
   );
 }
