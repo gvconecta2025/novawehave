@@ -14,16 +14,66 @@ interface RotaMenu {
 }
 
 const ROTAS_SISTEMA: RotaMenu[] = [
-  { nome: 'Ponto de Venda', caminho: '/pdv', icone: '🛒', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
-  { nome: 'Assinaturas VIP', caminho: '/assinatura', icone: '🌟', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
-  { nome: 'Assistência Técnica', caminho: '/assistencia', icone: '🔧', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Técnicos Credenciados'] },
-  { nome: 'Painel Caixa', caminho: '/caixa', icone: '💰', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Caixa/Financeiro'] },
-  { nome: 'Estoque', caminho: '/estoque', icone: '📦', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
-  { nome: 'Métricas Globais', caminho: '/metricas', icone: '📊', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
-  { nome: 'Gestão de Equipe', caminho: '/equipe', icone: '👥', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
-  { nome: 'Central de Sugestões', caminho: '/sugestoes', icone: '💡', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'] },
-  { nome: 'Painel Vendedor', caminho: '/vendedor', icone: '📈', perfisPermitidos: ['Master', 'Supervisor', 'Vendedores', 'Folguista'] },
-  { nome: 'Configurações Globais', caminho: '/configuracoes', icone: '⚙️', perfisPermitidos: ['Master', 'Admin/Dev'] }
+  { 
+    nome: 'Ponto de Venda', 
+    caminho: '/pdv', 
+    icone: '🛒', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] 
+  },
+  { 
+    nome: 'Assinaturas VIP', 
+    caminho: '/assinatura', 
+    icone: '🌟', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] 
+  },
+  { 
+    nome: 'Assistência Técnica', 
+    caminho: '/assistencia', 
+    icone: '🔧', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Técnicos Credenciados'] 
+  },
+  { 
+    nome: 'Painel Caixa', 
+    caminho: '/caixa', 
+    icone: '💰', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Caixa/Financeiro'] 
+  },
+  { 
+    nome: 'Estoque', 
+    caminho: '/estoque', 
+    icone: '📦', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] 
+  },
+  { 
+    nome: 'Métricas Globais', 
+    caminho: '/metricas', 
+    icone: '📊', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] 
+  },
+  { 
+    nome: 'Gestão de Equipe', 
+    caminho: '/equipe', 
+    icone: '👥', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] 
+  },
+  { 
+    nome: 'Central de Sugestões', 
+    caminho: '/sugestoes', 
+    icone: '💡', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'] 
+  },
+  { 
+    nome: 'Painel Vendedor', 
+    caminho: '/vendedor', 
+    icone: '📈', 
+    perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] 
+  },
+  { 
+    nome: 'Configurações Globais', 
+    caminho: '/configuracoes', 
+    icone: '⚙️', 
+    perfisPermitidos: ['Master', 'Admin/Dev'] 
+  }
 ];
 
 export default function MenuLateral() {
@@ -31,7 +81,6 @@ export default function MenuLateral() {
   const pathname = usePathname();
   const [aberto, setAberto] = useState(false);
 
-  // Impede renderização se o usuário não estiver autenticado/carregado
   if (!perfilRbac) return null;
 
   const rotasAutorizadas = ROTAS_SISTEMA.filter((rota) => 
@@ -40,7 +89,6 @@ export default function MenuLateral() {
 
   return (
     <>
-      {/* Botão Hamburger (Fixo Globalmente) */}
       <button 
         onClick={() => setAberto(true)}
         className="fixed top-5 left-5 z-40 flex items-center justify-center rounded-lg bg-gray-900 p-3 text-white shadow-lg transition-transform hover:scale-105 hover:bg-black focus:outline-none"
@@ -49,7 +97,6 @@ export default function MenuLateral() {
         <span className="text-xl">☰</span>
       </button>
 
-      {/* Overlay Escuro */}
       {aberto && (
         <div 
           className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm transition-opacity"
@@ -57,7 +104,6 @@ export default function MenuLateral() {
         />
       )}
 
-      {/* Sidebar Drawer */}
       <nav 
         className={`fixed top-0 left-0 h-full w-72 bg-zinc-900 text-white shadow-2xl z-50 transform transition-transform duration-300 flex flex-col justify-between ${
           aberto ? 'translate-x-0' : '-translate-x-full'
