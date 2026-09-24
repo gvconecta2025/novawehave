@@ -9,7 +9,7 @@ import Link from 'next/link';
 import { PerfilRBAC } from '@/types/auth';
 
 interface MembroEquipe {
-  id: string; // Corresponde ao UID da Autenticação
+  id: string;
   nome_completo: string;
   email: string;
   perfil_rbac: PerfilRBAC;
@@ -34,7 +34,6 @@ export default function WorkspaceEquipe() {
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
 
-  // AÇÃO 1: Barreira RBAC Estrita
   const acessoPermitido = ['Master', 'Supervisor', 'Admin/Dev'].includes(perfilRbac || '');
 
   useEffect(() => {
@@ -53,7 +52,7 @@ export default function WorkspaceEquipe() {
           nome_completo: doc.data().nome_completo || 'Sem Nome',
           email: doc.data().email || 'Sem E-mail',
           perfil_rbac: doc.data().perfil_rbac || 'Vendedores',
-          acesso_liberado: doc.data().acesso_liberado !== false, // Fallback true para contas legadas
+          acesso_liberado: doc.data().acesso_liberado !== false,
         })) as MembroEquipe[];
         
         setMembros(dados);
@@ -70,7 +69,6 @@ export default function WorkspaceEquipe() {
     return () => desinscrever();
   }, [acessoPermitido, authCarregando]);
 
-  // AÇÃO 2: Ação de Alterar Perfil
   const lidarComAlteracaoPerfil = async (idUsuario: string, novoPerfil: string, nomeMembro: string) => {
     if (!confirm(`Deseja alterar o perfil de ${nomeMembro} para ${novoPerfil}?`)) return;
     
@@ -92,7 +90,6 @@ export default function WorkspaceEquipe() {
     }
   };
 
-  // AÇÃO 2: Ação de Bloquear/Liberar
   const lidarComAlternanciaAcesso = async (idUsuario: string, statusAtual: boolean, nomeMembro: string) => {
     const acaoTexto = statusAtual ? 'BLOQUEAR o acesso de' : 'LIBERAR o acesso de';
     if (!confirm(`Deseja realmente ${acaoTexto} ${nomeMembro}?`)) return;
@@ -152,8 +149,8 @@ export default function WorkspaceEquipe() {
   return (
     <>
       <MenuLateral />
-      {/* Injeção de UI: App Shell Wrapper */}
-      <div className="flex h-screen w-full flex-col bg-gray-50 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+      {/* PADRONIZAÇÃO: pl-20 (mobile) e md:pl-24 protegem o conteúdo da Sidebar */}
+      <div className="flex h-screen w-full flex-col bg-gray-50 p-6 pl-20 md:p-8 md:pl-24 font-sans overflow-hidden transition-all">
         
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
           <div>
@@ -162,7 +159,6 @@ export default function WorkspaceEquipe() {
           </div>
         </header>
 
-        {/* Lei Anti-Silêncio: Tratamento de Erros e Sucessos Visual */}
         {erro && (
           <div className="mb-6 w-full rounded border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm break-words">
             ⚠️ {erro}
@@ -211,7 +207,7 @@ export default function WorkspaceEquipe() {
                   </tr>
                 ) : (
                   membros.map((membro) => {
-                    const isMe = membro.id === usuarioAuth?.uid; // AÇÃO 2: Regra de Imunidade
+                    const isMe = membro.id === usuarioAuth?.uid;
 
                     return (
                       <tr key={membro.id} className={`transition-colors ${isMe ? 'bg-blue-50/30' : 'hover:bg-gray-50'}`}>
