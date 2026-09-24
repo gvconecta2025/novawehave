@@ -1,31 +1,27 @@
 import MenuLateral from '@/components/modulos/pdv/MenuLateral';
 import ComandaFixa from '@/components/modulos/pdv/ComandaFixa';
 
-export const metadata = {
-  title: 'PDV | We Have',
-  description: 'Ponto de Venda e Gestão Operacional',
-};
-
 export default function PdvLayout({ children }: { children: React.ReactNode }) {
   return (
-    // Body Absolute Rule: Desktop-first, 100vh, hidden overflow on body to prevent page jump
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-200 text-gray-900 font-sans">
+    <div className="flex h-screen w-full bg-gray-50 font-sans overflow-hidden">
       
-      {/* COLUNA 1: Menu Dinâmico (Largura Fixa) */}
-      <aside className="w-64 h-full flex-shrink-0 z-20">
-        <MenuLateral />
-      </aside>
-
-      {/* COLUNA 2: Workspace Principal (Scroll Independente, Flex-1 para ocupar centro) */}
-      <main className="flex-1 h-full overflow-y-auto p-6 relative z-10">
-        {children}
-      </main>
-
-      {/* COLUNA 3: Comanda Fixa (Largura Fixa) */}
-      <aside className="w-[400px] h-full flex-shrink-0 border-l border-gray-300 shadow-2xl z-20">
-        <ComandaFixa />
-      </aside>
-
+      {/* Injeção do App Shell Global */}
+      <MenuLateral />
+      
+      {/* Container Principal: O pl-16 empurra o conteúdo para fora da zona da Sidebar Fina */}
+      <div className="flex flex-1 pl-16 transition-all duration-300">
+        
+        {/* Workspace Central (Grid de Produtos) */}
+        <main className="flex-1 overflow-hidden p-6 md:p-8 custom-scrollbar">
+          {children}
+        </main>
+        
+        {/* Coluna Direita (Comanda Fixa) - Oculta em telas muito pequenas */}
+        <aside className="w-[350px] shrink-0 shadow-2xl z-10 hidden lg:block bg-white border-l border-gray-200">
+          <ComandaFixa />
+        </aside>
+        
+      </div>
     </div>
   );
 }
