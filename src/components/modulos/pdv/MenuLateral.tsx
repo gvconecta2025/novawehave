@@ -30,7 +30,6 @@ export default function MenuLateral() {
   const { usuarioAuth, perfilRbac, usuarioDb, fazerLogout } = useAuthStore();
   const pathname = usePathname();
 
-  // Bloqueio Logado: Nunca renderiza se o usuário não estiver autenticado e validado
   if (!usuarioAuth || !perfilRbac) return null;
 
   const rotasAutorizadas = ROTAS_SISTEMA.filter((rota) => 
@@ -38,10 +37,10 @@ export default function MenuLateral() {
   );
 
   return (
-    <nav className="fixed left-0 top-0 h-full z-50 bg-zinc-900 text-white shadow-2xl transition-all duration-300 w-16 hover:w-64 group flex flex-col justify-between overflow-hidden whitespace-nowrap border-r border-zinc-800">
+    // AÇÃO 1: Sidebar Relativa e Fluida (Sem 'fixed')
+    <nav className="h-full bg-zinc-900 text-white transition-all duration-300 w-16 hover:w-64 flex-shrink-0 group flex flex-col justify-between overflow-hidden whitespace-nowrap border-r border-zinc-800 relative z-40">
       
       <div className="flex flex-col flex-1 overflow-hidden">
-        {/* Topo / Logo */}
         <div className="flex h-20 items-center justify-start border-b border-zinc-800 bg-black px-4 shrink-0 transition-colors group-hover:bg-zinc-950">
           <div className="flex w-8 justify-center shrink-0">
             <span className="text-xl font-black text-blue-500 group-hover:hidden">W</span>
@@ -52,7 +51,6 @@ export default function MenuLateral() {
           </span>
         </div>
         
-        {/* Navegação */}
         <ul className="flex flex-col gap-2 py-4 px-2 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1">
           {rotasAutorizadas.map((rota) => {
             const isActive = pathname.startsWith(rota.caminho);
@@ -78,7 +76,6 @@ export default function MenuLateral() {
         </ul>
       </div>
 
-      {/* Base / Usuário e Logout */}
       <div className="border-t border-zinc-800 bg-black/20 shrink-0">
         <div className="p-3 flex items-center transition-all duration-300 group-hover:px-4 group-hover:pt-4 group-hover:pb-2">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white shadow-inner">
