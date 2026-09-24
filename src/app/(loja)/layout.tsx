@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-// 1. IMPORTAÇÃO DO WIDGET ADICIONADA AQUI
 import ComparadorWidget from '@/components/modulos/loja/ComparadorWidget';
 
 export default function LojaLayout({ children }: { children: React.ReactNode }) {
@@ -17,7 +16,7 @@ export default function LojaLayout({ children }: { children: React.ReactNode }) 
     <div className="flex min-h-screen flex-col bg-gray-50 font-sans text-gray-900">
       
       {/* Header Responsivo */}
-      <header className="sticky top-0 z-50 w-full border-b border-gray-200 bg-white shadow-sm">
+      <header className="sticky top-0 z-40 w-full border-b border-gray-200 bg-white shadow-sm">
         <div className="bg-blue-600 px-4 py-1.5 text-center text-xs font-medium text-white sm:text-sm">
           Compre pelo site e retire na loja em até 2 horas! 🚀
         </div>
@@ -60,14 +59,12 @@ export default function LojaLayout({ children }: { children: React.ReactNode }) 
       {/* Conteúdo Principal */}
       <main className="flex-1 relative">
         {children}
-        
-        {/* 2. INJEÇÃO DO COMPONENTE FLUTUANTE ADICIONADA AQUI */}
         <ComparadorWidget />
       </main>
 
       {/* Rodapé (Footer) */}
       <footer className="mt-16 bg-zinc-900 pt-12 text-zinc-300">
-        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 sm:grid-cols-2 md:grid-cols-4 sm:px-6 lg:px-8 pb-12">
+        <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-4 sm:grid-cols-2 md:grid-cols-4 sm:px-6 lg:px-8 pb-8">
           <div>
             <h2 className="text-2xl font-black tracking-widest text-white mb-4">
               WE<span className="text-blue-500">HAVE</span>
@@ -104,8 +101,17 @@ export default function LojaLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
 
-        <div className="border-t border-zinc-800 bg-black py-6 text-center text-xs text-zinc-500">
+        {/* Base do Rodapé + Ponte de Acesso da Equipe */}
+        <div className="border-t border-zinc-800 bg-black py-6 flex flex-col items-center justify-center gap-3 text-xs text-zinc-500">
           <p>© {new Date().getFullYear()} We Have Store. Todos os direitos reservados.</p>
+          
+          {/* AÇÃO 3: Ponte Discreta para o Painel Interno */}
+          <Link 
+            href="/pdv" 
+            className="flex items-center gap-1.5 font-bold text-zinc-700 hover:text-zinc-400 transition-colors"
+          >
+            <span>🔒</span> Acesso Restrito da Equipe
+          </Link>
         </div>
       </footer>
     </div>
