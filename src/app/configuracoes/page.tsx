@@ -10,18 +10,15 @@ import Link from 'next/link';
 export default function WorkspaceConfiguracoes() {
   const { perfilRbac, usuarioDb, usuarioAuth, carregando: authCarregando } = useAuthStore();
   
-  // Campos do Formulário CMS
   const [whatsappLoja, setWhatsappLoja] = useState('');
   const [bannerTexto, setBannerTexto] = useState('');
   const [descontoPix, setDescontoPix] = useState<number | string>('');
   
-  // Estados de Controlo
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
 
-  // Barreira RBAC Estrita
   const acessoPermitido = ['Master', 'Admin/Dev'].includes(perfilRbac || '');
 
   useEffect(() => {
@@ -62,10 +59,9 @@ export default function WorkspaceConfiguracoes() {
       const docRef = doc(bancoDeDados, 'configuracoes', 'geral');
       
       const payloadConfiguracoes = {
-        whatsapp_loja: whatsappLoja.replace(/\D/g, ''), // Mantém apenas números
+        whatsapp_loja: whatsappLoja.replace(/\D/g, ''),
         banner_promocional_texto: bannerTexto.trim(),
         desconto_pix_percentual: Number(descontoPix) || 0,
-        // Auditoria Estrita (Lei 3)
         auditoria: {
           atualizado_por_id: usuarioAuth?.uid || 'desconhecido',
           atualizado_por_nome: usuarioDb?.nome_completo || 'Admin',
@@ -73,11 +69,9 @@ export default function WorkspaceConfiguracoes() {
         }
       };
 
-      // Usa merge: true para atualizar apenas os campos especificados sem apagar o resto
       await setDoc(docRef, payloadConfiguracoes, { merge: true });
       
       setSucesso('✅ Configurações globais salvas com sucesso! As alterações já estão ativas na Loja e PDV.');
-      
       setTimeout(() => setSucesso(null), 5000);
     } catch (err: any) {
       console.error('[ERRO SALVAR CONFIGURACOES]', err);
@@ -87,7 +81,6 @@ export default function WorkspaceConfiguracoes() {
     }
   };
 
-  // UI de Acesso Negado
   if (!carregando && !acessoPermitido) {
     return (
       <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-100 p-8 font-sans">
@@ -108,8 +101,8 @@ export default function WorkspaceConfiguracoes() {
   return (
     <>
       <MenuLateral />
-      
-      <div className="flex h-screen w-full flex-col bg-gray-50 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+      {/* PADRONIZAÇÃO: pl-20 (mobile) e md:pl-24 */}
+      <div className="flex h-screen w-full flex-col bg-gray-50 p-6 pl-20 md:p-8 md:pl-24 font-sans overflow-hidden transition-all">
         
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
           <div>
@@ -118,7 +111,6 @@ export default function WorkspaceConfiguracoes() {
           </div>
         </header>
 
-        {/* Regras Anti-Silêncio Locais */}
         {erro && (
           <div className="mb-6 w-full rounded border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm break-words">
             ⚠️ {erro}
@@ -141,7 +133,6 @@ export default function WorkspaceConfiguracoes() {
             <form onSubmit={lidarComSalvamento} className="flex-1 flex flex-col relative">
               
               <div className="p-8 space-y-10">
-                {/* Bloco 1: Comunicação e O2O */}
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
                     <span className="text-2xl">📱</span> Omnichannel (O2O) & Contactos
@@ -162,7 +153,6 @@ export default function WorkspaceConfiguracoes() {
                   </div>
                 </section>
 
-                {/* Bloco 2: CMS da Loja Pública */}
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
                     <span className="text-2xl">🖥️</span> Vitrine Pública (CMS)
@@ -181,7 +171,6 @@ export default function WorkspaceConfiguracoes() {
                   </div>
                 </section>
 
-                {/* Bloco 3: Regras de Negócio / Financeiro */}
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
                     <span className="text-2xl">💰</span> Regras de Negócio & Checkout
@@ -209,7 +198,6 @@ export default function WorkspaceConfiguracoes() {
                 </section>
               </div>
 
-              {/* Rodapé de Ações Fixo */}
               <div className="sticky bottom-0 mt-auto flex items-center justify-between border-t border-gray-200 bg-white p-6 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
                 <span className="text-xs text-gray-400 font-medium">
                   Última edição por: <strong className="text-gray-700 uppercase">{usuarioDb?.nome_completo || 'Sistema'}</strong>
