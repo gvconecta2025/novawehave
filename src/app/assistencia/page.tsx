@@ -130,7 +130,8 @@ export default function WorkspaceAssistencia() {
   return (
     <>
       <MenuLateral />
-      <div className="flex h-screen flex-col font-sans bg-gray-50 p-6 pt-20 lg:pt-6 lg:pl-24 overflow-hidden transition-all">
+      {/* PADRONIZAÇÃO: pl-20 (mobile) e md:pl-24 */}
+      <div className="flex h-screen flex-col bg-gray-50 p-6 pl-20 md:p-8 md:pl-24 font-sans overflow-hidden transition-all">
         
         <header className="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 rounded-xl border border-purple-200 bg-purple-50 p-5 shadow-sm">
           <div>
