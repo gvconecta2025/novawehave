@@ -19,6 +19,7 @@ const ROTAS_SISTEMA: RotaMenu[] = [
   { nome: 'Painel Caixa', caminho: '/caixa', icone: '💰', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Caixa/Financeiro'] },
   { nome: 'Estoque', caminho: '/estoque', icone: '📦', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
   { nome: 'Métricas Globais', caminho: '/metricas', icone: '📊', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
+  { nome: 'Histórico Geral', caminho: '/historico', icone: '🕒', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
   { nome: 'Gestão de Equipe', caminho: '/equipe', icone: '👥', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev'] },
   { nome: 'Central de Sugestões', caminho: '/sugestoes', icone: '💡', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'] },
   { nome: 'Painel Vendedor', caminho: '/vendedor', icone: '📈', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
