@@ -27,28 +27,22 @@ interface UsuarioEquipa {
 export default function WorkspaceVendedor() {
   const { usuarioAuth, usuarioDb, perfilRbac, carregando: authCarregando } = useAuthStore();
   
-  // Estados Principais
   const [comandas, setComandas] = useState<ComandaVendedor[]>([]);
   const [vendedorSelecionadoId, setVendedorSelecionadoId] = useState<string>('');
   
-  // Estados para Onipotência Administrativa (Gestores)
   const [listaVendedores, setListaVendedores] = useState<UsuarioEquipa[]>([]);
   
-  // Estados de Controlo
   const [carregandoDados, setCarregandoDados] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Validação de Permissão Administrativa
   const isGestor = ['Master', 'Admin/Dev', 'Supervisor'].includes(perfilRbac || '');
 
-  // 1. Inicializa o ID do vendedor focado assim que a autenticação resolve
   useEffect(() => {
     if (!authCarregando && usuarioAuth && !vendedorSelecionadoId) {
       setVendedorSelecionadoId(usuarioAuth.uid);
     }
   }, [authCarregando, usuarioAuth, vendedorSelecionadoId]);
 
-  // 2. Popula o Seletor de Gestores (Lista de Equipa)
   useEffect(() => {
     if (!isGestor) return;
 
@@ -73,7 +67,6 @@ export default function WorkspaceVendedor() {
     return () => desinscreverUsuarios();
   }, [isGestor]);
 
-  // 3. Query Principal (Reage dinamicamente ao vendedorSelecionadoId)
   useEffect(() => {
     if (!vendedorSelecionadoId) return;
     
@@ -93,11 +86,10 @@ export default function WorkspaceVendedor() {
           ...doc.data(),
         })) as ComandaVendedor[];
         
-        // Ordenação segura em memória (Blindagem Anti-Silêncio)
         dados.sort((a, b) => {
           const tempoA = typeof a.auditoria?.criado_em?.toMillis === 'function' ? a.auditoria.criado_em.toMillis() : 0;
           const tempoB = typeof b.auditoria?.criado_em?.toMillis === 'function' ? b.auditoria.criado_em.toMillis() : 0;
-          return tempoB - tempoA; // Mais recentes primeiro
+          return tempoB - tempoA; 
         });
 
         setComandas(dados);
@@ -113,7 +105,6 @@ export default function WorkspaceVendedor() {
     return () => desinscreverComandas();
   }, [vendedorSelecionadoId]);
 
-  // Cálculo das Métricas de Performance
   const vendasExpressas = comandas.filter(c => c.fluxo_operacional === 'Venda Expressa');
   const totalRendimentoVendas = vendasExpressas.reduce((acc, curr) => acc + (Number(curr.valor_total) || 0), 0);
   
@@ -143,7 +134,8 @@ export default function WorkspaceVendedor() {
   return (
     <>
       <MenuLateral />
-      <div className="flex h-screen w-full flex-col bg-gray-50 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+      {/* PADRONIZAÇÃO: pl-20 (mobile) e md:pl-24 */}
+      <div className="flex h-screen w-full flex-col bg-gray-50 p-6 pl-20 md:p-8 md:pl-24 font-sans overflow-hidden transition-all">
         
         <header className="mb-6 flex flex-col gap-4 border-b border-gray-200 pb-6">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -158,7 +150,6 @@ export default function WorkspaceVendedor() {
             </div>
           </div>
 
-          {/* Seletor Administrativo (Onipotência de Dados) */}
           {isGestor && (
             <div className="mt-2 flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-200 shadow-sm w-full md:w-auto self-start">
               <label htmlFor="auditorSelect" className="text-sm font-bold text-gray-700">Auditar Colaborador:</label>
@@ -184,7 +175,6 @@ export default function WorkspaceVendedor() {
           </div>
         )}
 
-        {/* Cards de Métricas */}
         <div className="mb-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           
           <div className="rounded-xl border border-green-200 bg-white p-5 shadow-sm relative overflow-hidden">
@@ -219,7 +209,6 @@ export default function WorkspaceVendedor() {
 
         </div>
 
-        {/* Histórico Recente */}
         <div className="flex-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col">
           <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-4">
             <h2 className="text-lg font-bold text-gray-800">Histórico de Transações</h2>
