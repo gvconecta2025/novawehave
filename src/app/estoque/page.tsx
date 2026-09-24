@@ -13,6 +13,14 @@ interface ProdutoEstoque {
   nome: string;
   preco: number;
   saldo_estoque: number;
+  descricao?: string;
+  midia_urls?: string[];
+  video_url?: string;
+  especificacoes_tecnicas?: {
+    marca?: string;
+    material?: string;
+    cor?: string;
+  };
   sincronizacao_bling: {
     sincronizado: boolean;
     id_produto_bling: string | null;
@@ -42,6 +50,10 @@ export default function WorkspaceEstoque() {
             nome: data.nome || 'PRODUTO SEM NOME',
             preco: data.preco || 0,
             saldo_estoque: data.saldo_estoque || 0,
+            descricao: data.descricao,
+            midia_urls: data.midia_urls || [],
+            video_url: data.video_url,
+            especificacoes_tecnicas: data.especificacoes_tecnicas || {},
             sincronizacao_bling: {
               sincronizado: data.sincronizacao_bling?.sincronizado || false,
               id_produto_bling: data.sincronizacao_bling?.id_produto_bling || null,
@@ -71,7 +83,8 @@ export default function WorkspaceEstoque() {
   return (
     <>
       <MenuLateral />
-      <div className="flex h-screen w-full flex-col bg-gray-100 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+      {/* PADRONIZAÇÃO: pl-20 (mobile) e md:pl-24 protegem o conteúdo */}
+      <div className="flex h-screen w-full flex-col bg-gray-100 p-6 pl-20 md:p-8 md:pl-24 font-sans overflow-hidden transition-all">
         
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
