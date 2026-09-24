@@ -92,7 +92,8 @@ export default function PainelCaixa() {
   return (
     <>
       <MenuLateral />
-      <div className="flex h-screen w-full flex-col bg-gray-100 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+      {/* PADRONIZAÇÃO: pl-20 (mobile) e md:pl-24 protegem o conteúdo da Sidebar */}
+      <div className="flex h-screen w-full flex-col bg-gray-100 p-6 pl-20 md:p-8 md:pl-24 font-sans overflow-hidden transition-all">
         
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
