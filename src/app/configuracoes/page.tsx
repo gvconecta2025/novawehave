@@ -4,26 +4,29 @@ import { useEffect, useState } from 'react';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
+import MenuLateral from '@/components/modulos/pdv/MenuLateral';
 import Link from 'next/link';
 
 export default function WorkspaceConfiguracoes() {
-  const { perfilRbac, usuarioDb, usuarioAuth } = useAuthStore();
+  const { perfilRbac, usuarioDb, usuarioAuth, carregando: authCarregando } = useAuthStore();
   
+  // Campos do Formulário CMS
   const [whatsappLoja, setWhatsappLoja] = useState('');
   const [bannerTexto, setBannerTexto] = useState('');
   const [descontoPix, setDescontoPix] = useState<number | string>('');
   
+  // Estados de Controlo
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
 
-  // Barreira RBAC Estrita (Apenas Master e Admin/Dev)
-  const acessoPermitido = perfilRbac === 'Master' || perfilRbac === 'Admin/Dev';
+  // Barreira RBAC Estrita
+  const acessoPermitido = ['Master', 'Admin/Dev'].includes(perfilRbac || '');
 
   useEffect(() => {
-    if (!acessoPermitido) {
-      setCarregando(false);
+    if (authCarregando || !acessoPermitido) {
+      if (!authCarregando && !acessoPermitido) setCarregando(false);
       return;
     }
 
@@ -36,18 +39,18 @@ export default function WorkspaceConfiguracoes() {
           const dados = docSnap.data();
           setWhatsappLoja(dados.whatsapp_loja || '');
           setBannerTexto(dados.banner_promocional_texto || '');
-          setDescontoPix(dados.desconto_pix_percentual || '');
+          setDescontoPix(dados.desconto_pix_percentual || 0);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('[ERRO CARREGAMENTO CONFIGURACOES]', err);
-        setErro('Falha ao conectar com o banco de dados. Verifique a rede.');
+        setErro(`Falha ao conectar com o banco de dados: ${err.message}`);
       } finally {
         setCarregando(false);
       }
     };
 
     carregarConfiguracoes();
-  }, [acessoPermitido]);
+  }, [acessoPermitido, authCarregando]);
 
   const lidarComSalvamento = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,8 +62,8 @@ export default function WorkspaceConfiguracoes() {
       const docRef = doc(bancoDeDados, 'configuracoes', 'geral');
       
       const payloadConfiguracoes = {
-        whatsapp_loja: whatsappLoja,
-        banner_promocional_texto: bannerTexto,
+        whatsapp_loja: whatsappLoja.replace(/\D/g, ''), // Mantém apenas números
+        banner_promocional_texto: bannerTexto.trim(),
         desconto_pix_percentual: Number(descontoPix) || 0,
         // Auditoria Estrita (Lei 3)
         auditoria: {
@@ -70,16 +73,15 @@ export default function WorkspaceConfiguracoes() {
         }
       };
 
-      // Usa setDoc com merge para não sobrescrever acidentalmente outros campos que possam existir no futuro
+      // Usa merge: true para atualizar apenas os campos especificados sem apagar o resto
       await setDoc(docRef, payloadConfiguracoes, { merge: true });
       
-      setSucesso('✅ Configurações globais salvas com sucesso!');
+      setSucesso('✅ Configurações globais salvas com sucesso! As alterações já estão ativas na Loja e PDV.');
       
-      // Limpa a mensagem de sucesso após 3 segundos
-      setTimeout(() => setSucesso(null), 3000);
-    } catch (err) {
+      setTimeout(() => setSucesso(null), 5000);
+    } catch (err: any) {
       console.error('[ERRO SALVAR CONFIGURACOES]', err);
-      setErro('Ocorreu um erro ao salvar as configurações. Tente novamente.');
+      setErro(`Ocorreu um erro ao salvar as configurações: ${err.message}`);
     } finally {
       setSalvando(false);
     }
@@ -93,7 +95,7 @@ export default function WorkspaceConfiguracoes() {
           <span className="mb-4 text-6xl">⛔</span>
           <h1 className="mb-2 text-2xl font-black text-gray-900">Acesso Restrito</h1>
           <p className="mb-6 text-sm text-gray-500">
-            O seu perfil ({perfilRbac}) não tem privilégios suficientes para acessar o painel de configurações do sistema.
+            O seu perfil ({perfilRbac}) não tem privilégios executivos para aceder ao painel de configurações do sistema.
           </p>
           <Link href="/pdv" className="rounded bg-blue-600 px-6 py-2.5 font-bold text-white transition hover:bg-blue-700">
             Voltar ao PDV
@@ -104,120 +106,136 @@ export default function WorkspaceConfiguracoes() {
   }
 
   return (
-    <div className="flex h-screen w-full flex-col bg-gray-100 p-8 font-sans overflow-hidden">
-      <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-black text-gray-900">Configurações Globais</h1>
-          <p className="text-gray-500 mt-1">Gestão de variáveis do sistema, integrações e CMS.</p>
-        </div>
-      </header>
-
-      {/* Regras Anti-Silêncio Locais */}
-      {erro && (
-        <div className="mb-6 w-full rounded border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-700 shadow-sm">
-          ⚠️ {erro}
-        </div>
-      )}
+    <>
+      <MenuLateral />
       
-      {sucesso && (
-        <div className="mb-6 w-full rounded border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-700 shadow-sm transition-all">
-          {sucesso}
-        </div>
-      )}
-
-      <div className="flex-1 overflow-y-auto rounded-xl border border-gray-200 bg-white p-8 shadow-sm">
-        {carregando ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3">
-            <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-            <p className="font-medium text-gray-500">A carregar configurações...</p>
+      <div className="flex h-screen w-full flex-col bg-gray-50 p-8 pt-20 lg:pt-8 lg:pl-24 font-sans overflow-hidden transition-all">
+        
+        <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
+          <div>
+            <h1 className="text-3xl font-black text-gray-900">Configurações Globais</h1>
+            <p className="text-gray-500 mt-1">Gestão de variáveis do sistema, integrações e CMS da Loja Pública.</p>
           </div>
-        ) : (
-          <form onSubmit={lidarComSalvamento} className="mx-auto max-w-3xl space-y-8">
-            
-            {/* Bloco 1: Comunicação e O2O */}
-            <section className="space-y-4 border-b border-gray-100 pb-8">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <span className="text-2xl">📱</span> Omnichannel (O2O)
-              </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">WhatsApp da Loja (DDI + DDD + Número)</label>
-                  <input
-                    type="text"
-                    value={whatsappLoja}
-                    onChange={(e) => setWhatsappLoja(e.target.value.replace(/\D/g, ''))}
-                    placeholder="Ex: 5533999999999"
-                    className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">Usado nos botões de conversão da vitrine pública.</p>
-                </div>
-              </div>
-            </section>
+        </header>
 
-            {/* Bloco 2: CMS da Loja Pública */}
-            <section className="space-y-4 border-b border-gray-100 pb-8">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <span className="text-2xl">🖥️</span> Vitrine Pública (CMS)
-              </h2>
-              <div>
-                <label className="mb-1 block text-sm font-semibold text-gray-700">Texto do Banner Principal</label>
-                <input
-                  type="text"
-                  value={bannerTexto}
-                  onChange={(e) => setBannerTexto(e.target.value)}
-                  placeholder="Ex: Lançamentos Exclusivos - Tudo para proteger o seu aparelho."
-                  className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-            </section>
-
-            {/* Bloco 3: Regras de Negócio / Financeiro */}
-            <section className="space-y-4 border-b border-gray-100 pb-8">
-              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                <span className="text-2xl">💰</span> Regras de Negócio
-              </h2>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-sm font-semibold text-gray-700">Desconto PIX (%)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="100"
-                    value={descontoPix}
-                    onChange={(e) => setDescontoPix(e.target.value)}
-                    placeholder="Ex: 10"
-                    className="w-full rounded-lg border border-gray-300 p-3 font-bold text-green-700 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-                  />
-                  <p className="mt-1 text-xs text-gray-400">Calculado automaticamente sobre os preços da loja.</p>
-                </div>
-              </div>
-            </section>
-
-            {/* Rodapé de Ações */}
-            <div className="flex items-center justify-between rounded-lg bg-gray-50 p-4 border border-gray-200">
-              <span className="text-xs text-gray-500">
-                Última edição por: <strong className="text-gray-700">{usuarioDb?.nome_completo}</strong>
-              </span>
-              <button
-                type="submit"
-                disabled={salvando}
-                className="flex items-center gap-2 rounded-lg bg-gray-900 px-8 py-3 text-sm font-bold text-white transition hover:bg-gray-800 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 shadow-md"
-              >
-                {salvando ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
-                    A SALVAR...
-                  </>
-                ) : (
-                  'SALVAR CONFIGURAÇÕES'
-                )}
-              </button>
-            </div>
-
-          </form>
+        {/* Regras Anti-Silêncio Locais */}
+        {erro && (
+          <div className="mb-6 w-full rounded border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm break-words">
+            ⚠️ {erro}
+          </div>
         )}
+        
+        {sucesso && (
+          <div className="mb-6 w-full rounded border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm animate-pulse-short">
+            {sucesso}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col custom-scrollbar">
+          {carregando ? (
+            <div className="flex h-full flex-col items-center justify-center gap-3 py-20 text-gray-400">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+              <p className="font-medium text-sm">A carregar configurações do servidor...</p>
+            </div>
+          ) : (
+            <form onSubmit={lidarComSalvamento} className="flex-1 flex flex-col relative">
+              
+              <div className="p-8 space-y-10">
+                {/* Bloco 1: Comunicação e O2O */}
+                <section className="space-y-4">
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <span className="text-2xl">📱</span> Omnichannel (O2O) & Contactos
+                  </h2>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                      <label className="mb-2 block text-sm font-bold text-gray-700">WhatsApp de Vendas (DDI + DDD + Número)</label>
+                      <input
+                        required
+                        type="text"
+                        value={whatsappLoja}
+                        onChange={(e) => setWhatsappLoja(e.target.value)}
+                        placeholder="Ex: 5533999999999"
+                        className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 font-mono text-gray-800"
+                      />
+                      <p className="mt-2 text-xs text-gray-500 font-medium">Este número receberá todas as mensagens de conversão geradas na Loja Pública e nos links de Assistência.</p>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Bloco 2: CMS da Loja Pública */}
+                <section className="space-y-4">
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <span className="text-2xl">🖥️</span> Vitrine Pública (CMS)
+                  </h2>
+                  <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                    <label className="mb-2 block text-sm font-bold text-gray-700">Texto do Banner Promocional (Home)</label>
+                    <textarea
+                      required
+                      rows={3}
+                      value={bannerTexto}
+                      onChange={(e) => setBannerTexto(e.target.value)}
+                      placeholder="Ex: Lançamentos Exclusivos - Tudo para proteger o seu aparelho."
+                      className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 text-gray-800"
+                    />
+                    <p className="mt-2 text-xs text-gray-500 font-medium">Mensagem de destaque exibida no topo da vitrine principal para todos os clientes.</p>
+                  </div>
+                </section>
+
+                {/* Bloco 3: Regras de Negócio / Financeiro */}
+                <section className="space-y-4">
+                  <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
+                    <span className="text-2xl">💰</span> Regras de Negócio & Checkout
+                  </h2>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                      <label className="mb-2 block text-sm font-bold text-gray-700">Desconto PIX (%) na Loja Pública</label>
+                      <div className="relative">
+                        <input
+                          required
+                          type="number"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          value={descontoPix}
+                          onChange={(e) => setDescontoPix(e.target.value)}
+                          placeholder="Ex: 10"
+                          className="w-full rounded-lg border border-gray-300 p-3 pr-10 font-black text-green-700 outline-none transition focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                        />
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                      </div>
+                      <p className="mt-2 text-xs text-gray-500 font-medium">Este desconto é calculado automaticamente e exibido como gatilho mental na vitrine e na Landing Page de cada produto.</p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              {/* Rodapé de Ações Fixo */}
+              <div className="sticky bottom-0 mt-auto flex items-center justify-between border-t border-gray-200 bg-white p-6 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+                <span className="text-xs text-gray-400 font-medium">
+                  Última edição por: <strong className="text-gray-700 uppercase">{usuarioDb?.nome_completo || 'Sistema'}</strong>
+                </span>
+                <button
+                  type="submit"
+                  disabled={salvando}
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3.5 text-sm font-black text-white transition-all hover:bg-blue-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70 shadow-lg hover:shadow-blue-600/30"
+                >
+                  {salvando ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></div>
+                      A SALVAR NO SERVIDOR...
+                    </>
+                  ) : (
+                    <>
+                      <span>💾</span> SALVAR CONFIGURAÇÕES GLOBAIS
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
