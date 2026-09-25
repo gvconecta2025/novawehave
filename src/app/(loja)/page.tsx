@@ -110,29 +110,29 @@ export default function HomeLoja() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 relative pb-24">
       
-      {/* AÇÃO 3: Carrossel Dinâmico de Banners (Snap Scroll) */}
+      {/* AÇÃO 3: Carrossel Dinâmico de Banners via CMS (Snap-X Nativo) */}
       {configuracoes.banners_vitrine_urls.length > 0 && (
         <div className="mb-12 flex w-full overflow-x-auto snap-x snap-mandatory rounded-2xl shadow-lg custom-scrollbar bg-gray-100 border border-gray-200">
           {configuracoes.banners_vitrine_urls.map((url, idx) => (
             <div key={idx} className="shrink-0 w-full aspect-[21/9] sm:aspect-[3/1] lg:aspect-[4/1] snap-start relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt={`Oferta ${idx + 1}`} className="w-full h-full object-cover" />
+              <img src={url} alt={`Destaque Promocional ${idx + 1}`} className="w-full h-full object-cover" />
             </div>
           ))}
         </div>
       )}
 
       <div className="mb-6 flex items-center justify-between">
-        <h2 className="text-2xl font-black tracking-tight text-gray-900">Destaques da Loja</h2>
-        <span className="text-sm font-semibold text-gray-500">{produtos.length} produtos</span>
+        <h2 className="text-2xl font-black tracking-tight text-gray-900">Catálogo Disponível</h2>
+        <span className="text-sm font-semibold text-gray-500">{produtos.length} produtos em loja</span>
       </div>
 
-      {erro && <div className="mb-8 rounded border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-700 shadow-sm">⚠️ {erro}</div>}
+      {erro && <div className="mb-8 rounded-xl border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-700 shadow-sm">⚠️ {erro}</div>}
 
       {carregando ? (
         <div className="flex h-64 items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div></div>
       ) : produtos.length === 0 && !erro ? (
-        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-center"><span className="text-5xl mb-4">🥺</span><h3 className="text-xl font-bold">Sem estoque!</h3></div>
+        <div className="flex h-64 flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-gray-50 text-center"><span className="text-5xl mb-4">🥺</span><h3 className="text-xl font-bold text-gray-700">Poxa, estamos sem estoque!</h3><p className="text-gray-500 mt-2">Nenhum produto disponível no momento. Volte mais tarde.</p></div>
       ) : (
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {produtos.map((produto) => {
@@ -166,9 +166,11 @@ export default function HomeLoja() {
                     </div>
                     
                     <div className="flex flex-col gap-2 mt-4">
-                      <button onClick={() => lidarComCompraO2O(produto)} className="w-full rounded-xl bg-gray-900 py-3 text-sm font-bold text-white transition hover:bg-green-600 active:scale-[0.98]">💬 Comprar</button>
+                      <button onClick={() => lidarComCompraO2O(produto)} className="w-full rounded-xl bg-gray-900 py-3 text-sm font-black text-white transition hover:bg-green-600 active:scale-[0.98] shadow-md flex items-center justify-center gap-2">
+                        <span className="text-lg">💬</span> Comprar Agora
+                      </button>
                       <label className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-300 py-2.5 text-xs font-bold text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors">
-                        <input type="checkbox" checked={noComparador} onChange={() => alternarComparacao(produto)} className="w-4 h-4 text-blue-600 rounded" />
+                        <input type="checkbox" checked={noComparador} onChange={() => alternarComparacao(produto)} className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500" />
                         {noComparador ? 'Adicionado à Comparação' : 'Comparar Produto'}
                       </label>
                     </div>
@@ -187,7 +189,7 @@ export default function HomeLoja() {
               <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-lg font-black shadow-inner">{itensComparacao.length}</span>
               <div><p className="font-bold text-sm sm:text-base">Produtos para comparação</p><p className="text-xs text-gray-400">Limite de 3 simultâneos.</p></div>
             </div>
-            <button onClick={() => alert('Comparador (Briefing a seguir)')} className="rounded-lg bg-white px-6 py-2.5 text-sm font-black text-gray-900 hover:bg-gray-100 shadow-md">Ver Comparação ⚖️</button>
+            <button onClick={() => alert('Modal de Comparação (Próximo Briefing)')} className="rounded-xl bg-white px-6 py-2.5 text-sm font-black text-gray-900 hover:bg-gray-100 shadow-md transition-colors active:scale-95">Ver Comparação ⚖️</button>
           </div>
         </div>
       )}
