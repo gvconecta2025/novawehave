@@ -5,7 +5,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
 import { comprimirImagemWebP } from '@/lib/utils/image';
-import MenuLateral from '@/components/modulos/pdv/MenuLateral';
+import AppLayoutWrapper from '@/components/global/AppLayoutWrapper';
 import Link from 'next/link';
 
 export default function WorkspaceConfiguracoes() {
@@ -44,7 +44,7 @@ export default function WorkspaceConfiguracoes() {
         }
       } catch (err: any) {
         console.error('[ERRO CARREGAMENTO CONFIGURACOES]', err);
-        setErro(`Falha ao conectar com o banco de dados: ${err.message}`);
+        setErro(`Falha ao conectar com a base de dados: ${err.message}`);
       } finally {
         setCarregando(false);
       }
@@ -53,7 +53,6 @@ export default function WorkspaceConfiguracoes() {
     carregarConfiguracoes();
   }, [acessoPermitido, authCarregando]);
 
-  // AÇÃO 3: Lógica de Upload e Compressão WebP para Banners da Loja
   const lidarComUploadBanners = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
@@ -65,6 +64,7 @@ export default function WorkspaceConfiguracoes() {
 
     for (const file of files) {
       try {
+        // Lei 6: Processamento WebP Client-Side
         const ficheiroWebP = await comprimirImagemWebP(file);
         
         const formData = new FormData();
@@ -76,7 +76,7 @@ export default function WorkspaceConfiguracoes() {
         });
         
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erro desconhecido ao carregar imagem do banner.');
+        if (!res.ok) throw new Error(data.error || 'Erro desconhecido ao carregar o banner.');
         
         novosUrls.push(data.url);
       } catch (err: any) {
@@ -115,11 +115,11 @@ export default function WorkspaceConfiguracoes() {
 
       await setDoc(docRef, payloadConfiguracoes, { merge: true });
       
-      setSucesso('✅ Configurações globais e banners salvas com sucesso!');
+      setSucesso('✅ Configurações e Carrossel de Banners atualizados com sucesso!');
       setTimeout(() => setSucesso(null), 5000);
     } catch (err: any) {
       console.error('[ERRO SALVAR CONFIGURACOES]', err);
-      setErro(`Ocorreu um erro ao salvar as configurações: ${err.message}`);
+      setErro(`Ocorreu um erro ao guardar as configurações: ${err.message}`);
     } finally {
       setSalvando(false);
     }
@@ -131,54 +131,52 @@ export default function WorkspaceConfiguracoes() {
         <div className="flex max-w-md flex-col items-center text-center">
           <span className="mb-4 text-6xl">⛔</span>
           <h1 className="mb-2 text-2xl font-black">Acesso Restrito</h1>
-          <Link href="/pdv" className="mt-4 rounded bg-blue-600 px-6 py-2.5 font-bold text-white">Voltar ao PDV</Link>
+          <Link href="/pdv" className="mt-4 rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white shadow-md">Voltar ao PDV</Link>
         </div>
       </div>
     );
   }
 
   return (
-    // AÇÃO 1: Wrapper Flex Global do App Shell
-    <div className="flex h-screen w-screen overflow-hidden bg-gray-50 font-sans">
-      <MenuLateral />
-      
-      <div className="flex-1 flex flex-col overflow-hidden p-6 md:p-8 transition-all duration-300 relative">
+    <AppLayoutWrapper>
+      <div className="flex min-h-full flex-col p-6 md:p-8">
+        
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6 shrink-0">
           <div>
             <h1 className="text-3xl font-black text-gray-900">Configurações Globais</h1>
-            <p className="text-gray-500 mt-1">Gestão de variáveis do sistema, integrações e CMS da Loja Pública.</p>
+            <p className="text-gray-500 mt-1">Gestão de variáveis do sistema, CMS da Loja Pública e Integrações.</p>
           </div>
         </header>
 
-        {erro && <div className="mb-4 shrink-0 rounded border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm">{erro}</div>}
-        {sucesso && <div className="mb-4 shrink-0 rounded border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm">{sucesso}</div>}
+        {erro && <div className="mb-4 shrink-0 rounded-xl border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm">⚠️ {erro}</div>}
+        {sucesso && <div className="mb-4 shrink-0 rounded-xl border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm">{sucesso}</div>}
 
-        <div className="flex-1 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col custom-scrollbar">
+        <div className="flex-1 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
           {carregando ? (
-            <div className="flex h-full items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div></div>
+            <div className="flex h-64 items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div></div>
           ) : (
             <form onSubmit={lidarComSalvamento} className="flex-1 flex flex-col">
               <div className="p-8 space-y-10 flex-1">
                 
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
-                    <span className="text-2xl">📱</span> Omnichannel (O2O) & Contactos
+                    <span className="text-2xl">📱</span> Contactos (O2O)
                   </h2>
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 md:w-1/2">
                     <label className="mb-2 block text-sm font-bold text-gray-700">WhatsApp de Vendas (DDI + DDD + Número)</label>
-                    <input required type="text" value={whatsappLoja} onChange={(e) => setWhatsappLoja(e.target.value)} placeholder="Ex: 5533999999999" className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:ring-2 focus:ring-blue-100 font-mono" />
+                    <input required type="text" value={whatsappLoja} onChange={(e) => setWhatsappLoja(e.target.value)} placeholder="Ex: 5533999999999" className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:ring-2 focus:ring-blue-100 font-mono text-gray-800" />
                   </div>
                 </section>
 
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
-                    <span className="text-2xl">🖼️</span> Banners da Loja Pública (Carrossel)
+                    <span className="text-2xl">🖼️</span> Carrossel de Banners (Loja Pública)
                   </h2>
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Imagens do Carrossel (Formato Panorâmico 3:1)</label>
+                    <label className="block text-sm font-bold text-gray-700 mb-2">Adicionar Banners (Formato Panorâmico recomendado: 21:9 ou 3:1)</label>
                     <input type="file" accept="image/*" multiple onChange={lidarComUploadBanners} disabled={fazendoUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition cursor-pointer" />
                     
-                    {fazendoUpload && <p className="text-sm font-bold text-blue-600 mt-3 animate-pulse">A comprimir e enviar banners...</p>}
+                    {fazendoUpload && <p className="text-sm font-bold text-blue-600 mt-3 animate-pulse">A comprimir e enviar banners para o servidor WebP...</p>}
                     
                     {bannersVitrineUrls.length > 0 && (
                       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -196,7 +194,7 @@ export default function WorkspaceConfiguracoes() {
 
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
-                    <span className="text-2xl">💰</span> Regras de Negócio & Checkout
+                    <span className="text-2xl">💰</span> Checkout e Vantagens
                   </h2>
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 md:w-1/2">
                     <label className="mb-2 block text-sm font-bold text-gray-700">Desconto PIX (%) na Loja Pública</label>
@@ -209,16 +207,16 @@ export default function WorkspaceConfiguracoes() {
                 
               </div>
 
-              <div className="sticky bottom-0 bg-white p-6 shadow-[0_-10px_20px_rgba(0,0,0,0.02)] border-t border-gray-200 shrink-0 flex items-center justify-between">
-                <span className="text-xs text-gray-400 font-medium">Editado por: <strong className="uppercase">{usuarioDb?.nome_completo || 'Sistema'}</strong></span>
+              <div className="sticky bottom-0 bg-white p-6 shadow-[0_-10px_20px_rgba(0,0,0,0.02)] border-t border-gray-200 shrink-0 flex items-center justify-between rounded-b-xl">
+                <span className="text-xs text-gray-400 font-medium">Editado por: <strong className="uppercase text-gray-700">{usuarioDb?.nome_completo || 'Sistema'}</strong></span>
                 <button type="submit" disabled={salvando || fazendoUpload} className="flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3.5 text-sm font-black text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-70 shadow-lg">
-                  {salvando ? 'A SALVAR...' : '💾 SALVAR CONFIGURAÇÕES'}
+                  {salvando ? 'A SALVAR...' : '💾 GUARDAR CONFIGURAÇÕES'}
                 </button>
               </div>
             </form>
           )}
         </div>
       </div>
-    </div>
+    </AppLayoutWrapper>
   );
 }
