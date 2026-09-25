@@ -160,7 +160,6 @@ export default function MenuLateral() {
   
   const pathname = usePathname();
 
-  // Bloqueio Logado: Nunca renderiza se o utilizador não estiver autenticado
   if (!usuarioAuth || !perfilRbac) return null;
 
   const rotasAutorizadas = ROTAS_SISTEMA.filter((rota) => 
@@ -193,9 +192,9 @@ export default function MenuLateral() {
           </span>
         </div>
         
-        {/* Navegação */}
+        {/* Navegação (Scroll Invisível e Espaçamentos Compactos) */}
         <ul 
-          className="flex flex-col gap-1.5 py-6 overflow-y-auto overflow-x-hidden custom-scrollbar flex-1"
+          className="flex flex-col gap-1 py-4 overflow-y-auto overflow-x-hidden flex-1 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
         >
           {rotasAutorizadas.map((rota) => {
             const isActive = pathname === rota.caminho || 
@@ -205,7 +204,7 @@ export default function MenuLateral() {
               <li key={rota.caminho}>
                 <Link 
                   href={rota.caminho}
-                  className={`flex items-center px-5 py-3 transition-all duration-300 border-r-4 ${
+                  className={`flex items-center px-5 py-2.5 transition-all duration-300 border-r-4 ${
                     isActive 
                       ? 'bg-blue-600/10 text-blue-400 border-blue-500' 
                       : 'border-transparent text-zinc-400 hover:bg-zinc-800/30 hover:text-zinc-100'
