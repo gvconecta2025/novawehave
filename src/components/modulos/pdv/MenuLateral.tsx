@@ -13,6 +13,7 @@ interface RotaMenu {
 }
 
 const ROTAS_SISTEMA: RotaMenu[] = [
+  { nome: 'Loja Pública', caminho: '/', icone: '🏠', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista', 'Caixa/Financeiro', 'Técnicos Credenciados'] },
   { nome: 'Ponto de Venda', caminho: '/pdv', icone: '🛒', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
   { nome: 'Assinaturas VIP', caminho: '/assinatura', icone: '🌟', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Vendedores', 'Folguista'] },
   { nome: 'Assistência Técnica', caminho: '/assistencia', icone: '🔧', perfisPermitidos: ['Master', 'Supervisor', 'Admin/Dev', 'Técnicos Credenciados'] },
