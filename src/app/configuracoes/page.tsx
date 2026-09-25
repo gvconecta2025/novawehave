@@ -1,7 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
 import { comprimirImagemWebP } from '@/lib/utils/image';
@@ -9,7 +14,12 @@ import AppLayoutWrapper from '@/components/global/AppLayoutWrapper';
 import Link from 'next/link';
 
 export default function WorkspaceConfiguracoes() {
-  const { perfilRbac, usuarioDb, usuarioAuth, carregando: authCarregando } = useAuthStore();
+  const { 
+    perfilRbac, 
+    usuarioDb, 
+    usuarioAuth, 
+    carregando: authCarregando 
+  } = useAuthStore();
   
   // Campos do Formulário CMS
   const [whatsappLoja, setWhatsappLoja] = useState('');
@@ -27,7 +37,9 @@ export default function WorkspaceConfiguracoes() {
 
   useEffect(() => {
     if (authCarregando || !acessoPermitido) {
-      if (!authCarregando && !acessoPermitido) setCarregando(false);
+      if (!authCarregando && !acessoPermitido) {
+        setCarregando(false);
+      }
       return;
     }
 
@@ -38,13 +50,14 @@ export default function WorkspaceConfiguracoes() {
 
         if (docSnap.exists()) {
           const dados = docSnap.data();
+          
           setWhatsappLoja(dados.whatsapp_loja || '');
           setBannersVitrineUrls(dados.banners_vitrine_urls || []);
           setDescontoPix(dados.desconto_pix_percentual || 0);
         }
       } catch (err: any) {
         console.error('[ERRO CARREGAMENTO CONFIGURACOES]', err);
-        setErro(`Falha ao conectar com a base de dados: ${err.message}`);
+        setErro(`Falha ao conectar com o banco de dados: ${err.message}`);
       } finally {
         setCarregando(false);
       }
@@ -64,7 +77,6 @@ export default function WorkspaceConfiguracoes() {
 
     for (const file of files) {
       try {
-        // Lei 6: Processamento WebP Client-Side
         const ficheiroWebP = await comprimirImagemWebP(file);
         
         const formData = new FormData();
@@ -76,7 +88,10 @@ export default function WorkspaceConfiguracoes() {
         });
         
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erro desconhecido ao carregar o banner.');
+        
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro desconhecido ao carregar imagem do banner.');
+        }
         
         novosUrls.push(data.url);
       } catch (err: any) {
@@ -116,10 +131,14 @@ export default function WorkspaceConfiguracoes() {
       await setDoc(docRef, payloadConfiguracoes, { merge: true });
       
       setSucesso('✅ Configurações e Carrossel de Banners atualizados com sucesso!');
-      setTimeout(() => setSucesso(null), 5000);
+      
+      setTimeout(() => {
+        setSucesso(null);
+      }, 5000);
+      
     } catch (err: any) {
       console.error('[ERRO SALVAR CONFIGURACOES]', err);
-      setErro(`Ocorreu um erro ao guardar as configurações: ${err.message}`);
+      setErro(`Ocorreu um erro ao salvar as configurações: ${err.message}`);
     } finally {
       setSalvando(false);
     }
@@ -129,9 +148,18 @@ export default function WorkspaceConfiguracoes() {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-gray-100 p-8">
         <div className="flex max-w-md flex-col items-center text-center">
-          <span className="mb-4 text-6xl">⛔</span>
-          <h1 className="mb-2 text-2xl font-black">Acesso Restrito</h1>
-          <Link href="/pdv" className="mt-4 rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white shadow-md">Voltar ao PDV</Link>
+          <span className="mb-4 text-6xl">
+            ⛔
+          </span>
+          <h1 className="mb-2 text-2xl font-black">
+            Acesso Restrito
+          </h1>
+          <Link 
+            href="/pdv" 
+            className="mt-4 rounded-xl bg-blue-600 px-6 py-2.5 font-bold text-white shadow-md"
+          >
+            Voltar ao PDV
+          </Link>
         </div>
       </div>
     );
@@ -143,48 +171,101 @@ export default function WorkspaceConfiguracoes() {
         
         <header className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6 shrink-0">
           <div>
-            <h1 className="text-3xl font-black text-gray-900">Configurações Globais</h1>
-            <p className="text-gray-500 mt-1">Gestão de variáveis do sistema, CMS da Loja Pública e Integrações.</p>
+            <h1 className="text-3xl font-black text-gray-900">
+              Configurações Globais
+            </h1>
+            <p className="text-gray-500 mt-1">
+              Gestão de variáveis do sistema, CMS da Loja Pública e Integrações.
+            </p>
           </div>
         </header>
 
-        {erro && <div className="mb-4 shrink-0 rounded-xl border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm">⚠️ {erro}</div>}
-        {sucesso && <div className="mb-4 shrink-0 rounded-xl border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm">{sucesso}</div>}
+        {erro && (
+          <div className="mb-4 shrink-0 rounded-xl border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm">
+            ⚠️ {erro}
+          </div>
+        )}
+        
+        {sucesso && (
+          <div className="mb-4 shrink-0 rounded-xl border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm">
+            {sucesso}
+          </div>
+        )}
 
         <div className="flex-1 rounded-xl border border-gray-200 bg-white shadow-sm flex flex-col overflow-hidden">
           {carregando ? (
-            <div className="flex h-64 items-center justify-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div></div>
+            <div className="flex h-64 items-center justify-center">
+              <div className="h-10 w-10 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
+            </div>
           ) : (
             <form onSubmit={lidarComSalvamento} className="flex-1 flex flex-col">
+              
               <div className="p-8 space-y-10 flex-1">
                 
+                {/* Secção: WhatsApp */}
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
                     <span className="text-2xl">📱</span> Contactos (O2O)
                   </h2>
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 md:w-1/2">
-                    <label className="mb-2 block text-sm font-bold text-gray-700">WhatsApp de Vendas (DDI + DDD + Número)</label>
-                    <input required type="text" value={whatsappLoja} onChange={(e) => setWhatsappLoja(e.target.value)} placeholder="Ex: 5533999999999" className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:ring-2 focus:ring-blue-100 font-mono text-gray-800" />
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      WhatsApp de Vendas (DDI + DDD + Número)
+                    </label>
+                    <input 
+                      required 
+                      type="text" 
+                      value={whatsappLoja} 
+                      onChange={(e) => setWhatsappLoja(e.target.value)} 
+                      placeholder="Ex: 5533999999999" 
+                      className="w-full rounded-lg border border-gray-300 p-3 outline-none transition focus:ring-2 focus:ring-blue-100 font-mono text-gray-800" 
+                    />
                   </div>
                 </section>
 
+                {/* Secção: Carrossel Dinâmico */}
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
                     <span className="text-2xl">🖼️</span> Carrossel de Banners (Loja Pública)
                   </h2>
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                    <label className="block text-sm font-bold text-gray-700 mb-2">Adicionar Banners (Formato Panorâmico recomendado: 21:9 ou 3:1)</label>
-                    <input type="file" accept="image/*" multiple onChange={lidarComUploadBanners} disabled={fazendoUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition cursor-pointer" />
+                    <label className="block text-sm font-bold text-gray-700 mb-2">
+                      Adicionar Banners (Formato Panorâmico recomendado: 21:9 ou 3:1)
+                    </label>
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      multiple 
+                      onChange={lidarComUploadBanners} 
+                      disabled={fazendoUpload} 
+                      className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 transition cursor-pointer" 
+                    />
                     
-                    {fazendoUpload && <p className="text-sm font-bold text-blue-600 mt-3 animate-pulse">A comprimir e enviar banners para o servidor WebP...</p>}
+                    {fazendoUpload && (
+                      <p className="text-sm font-bold text-blue-600 mt-3 animate-pulse">
+                        A comprimir e enviar banners para o servidor WebP...
+                      </p>
+                    )}
                     
                     {bannersVitrineUrls.length > 0 && (
                       <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {bannersVitrineUrls.map((url, idx) => (
-                          <div key={idx} className="relative aspect-[3/1] rounded-xl border border-gray-300 overflow-hidden group bg-gray-200">
+                          <div 
+                            key={idx} 
+                            className="relative aspect-[3/1] rounded-xl border border-gray-300 overflow-hidden group bg-gray-200"
+                          >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={url} alt={`Banner ${idx}`} className="h-full w-full object-cover" />
-                            <button type="button" onClick={() => removerBanner(url)} className="absolute inset-0 bg-black/70 text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-sm backdrop-blur-sm">Remover Banner</button>
+                            <img 
+                              src={url} 
+                              alt={`Banner ${idx}`} 
+                              className="h-full w-full object-cover" 
+                            />
+                            <button 
+                              type="button" 
+                              onClick={() => removerBanner(url)} 
+                              className="absolute inset-0 bg-black/70 text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-sm backdrop-blur-sm"
+                            >
+                              Remover Banner
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -192,27 +273,49 @@ export default function WorkspaceConfiguracoes() {
                   </div>
                 </section>
 
+                {/* Secção: Checkout */}
                 <section className="space-y-4">
                   <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2 border-b border-gray-100 pb-2">
                     <span className="text-2xl">💰</span> Checkout e Vantagens
                   </h2>
                   <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 md:w-1/2">
-                    <label className="mb-2 block text-sm font-bold text-gray-700">Desconto PIX (%) na Loja Pública</label>
+                    <label className="mb-2 block text-sm font-bold text-gray-700">
+                      Desconto PIX (%) na Loja Pública
+                    </label>
                     <div className="relative">
-                      <input required type="number" step="0.1" min="0" max="100" value={descontoPix} onChange={(e) => setDescontoPix(e.target.value)} className="w-full rounded-lg border border-gray-300 p-3 pr-10 font-black text-green-700 outline-none transition focus:ring-2 focus:ring-green-100" />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">%</span>
+                      <input 
+                        required 
+                        type="number" 
+                        step="0.1" 
+                        min="0" 
+                        max="100" 
+                        value={descontoPix} 
+                        onChange={(e) => setDescontoPix(e.target.value)} 
+                        className="w-full rounded-lg border border-gray-300 p-3 pr-10 font-black text-green-700 outline-none transition focus:ring-2 focus:ring-green-100" 
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">
+                        %
+                      </span>
                     </div>
                   </div>
                 </section>
                 
               </div>
 
+              {/* Base do Formulário */}
               <div className="sticky bottom-0 bg-white p-6 shadow-[0_-10px_20px_rgba(0,0,0,0.02)] border-t border-gray-200 shrink-0 flex items-center justify-between rounded-b-xl">
-                <span className="text-xs text-gray-400 font-medium">Editado por: <strong className="uppercase text-gray-700">{usuarioDb?.nome_completo || 'Sistema'}</strong></span>
-                <button type="submit" disabled={salvando || fazendoUpload} className="flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3.5 text-sm font-black text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-70 shadow-lg">
+                <span className="text-xs text-gray-400 font-medium">
+                  Editado por: <strong className="uppercase text-gray-700">{usuarioDb?.nome_completo || 'Sistema'}</strong>
+                </span>
+                <button 
+                  type="submit" 
+                  disabled={salvando || fazendoUpload} 
+                  className="flex items-center gap-2 rounded-xl bg-blue-600 px-8 py-3.5 text-sm font-black text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-70 shadow-lg"
+                >
                   {salvando ? 'A SALVAR...' : '💾 GUARDAR CONFIGURAÇÕES'}
                 </button>
               </div>
+              
             </form>
           )}
         </div>
