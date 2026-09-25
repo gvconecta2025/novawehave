@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
-import { comprimirImagemWebP } from '@/lib/utils/image'; // Utilitário de Compressão
+import { comprimirImagemWebP } from '@/lib/utils/image';
 
 interface ModalNovoProdutoProps {
   aberto: boolean;
@@ -14,11 +14,13 @@ interface ModalNovoProdutoProps {
 export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoProps) {
   const { usuarioDb, usuarioAuth } = useAuthStore();
   
+  // Campos Base
   const [nome, setNome] = useState('');
   const [sku, setSku] = useState('');
   const [preco, setPreco] = useState('');
   const [saldoFisico, setSaldoFisico] = useState('');
   
+  // Campos Ricos e Mídia
   const [midiaUrls, setMidiaUrls] = useState<string[]>([]);
   const [videoUrl, setVideoUrl] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -26,10 +28,12 @@ export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoP
   const [material, setMaterial] = useState('');
   const [cor, setCor] = useState('');
   
+  // Controlo de Estado
   const [carregando, setCarregando] = useState(false);
   const [fazendoUpload, setFazendoUpload] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
+  // Geração de SKU Inteligente
   useEffect(() => {
     if (aberto && !sku) {
       setSku(`WH-${Math.random().toString(36).substring(2, 8).toUpperCase()}`);
@@ -38,6 +42,7 @@ export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoP
 
   if (!aberto) return null;
 
+  // Lógica de Upload e Compressão WebP
   const lidarComUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
@@ -49,7 +54,6 @@ export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoP
 
     for (const file of files) {
       try {
-        // AÇÃO 2: Compressão WebP Client-Side
         const ficheiroWebP = await comprimirImagemWebP(file);
         
         const formData = new FormData();
@@ -61,7 +65,10 @@ export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoP
         });
         
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erro desconhecido ao carregar imagem.');
+        
+        if (!res.ok) {
+          throw new Error(data.error || 'Erro desconhecido ao carregar imagem.');
+        }
         
         novosUrls.push(data.url);
       } catch (err: any) {
@@ -97,7 +104,10 @@ export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoP
           material: material.trim(),
           cor: cor.trim()
         },
-        sincronizacao_bling: { sincronizado: false, id_produto_bling: null },
+        sincronizacao_bling: { 
+          sincronizado: false, 
+          id_produto_bling: null 
+        },
         auditoria: {
           criado_por_id: usuarioAuth?.uid || 'desconhecido',
           criado_por_nome: usuarioDb?.nome_completo || 'Usuário Não Identificado',
@@ -109,9 +119,17 @@ export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoP
 
       await addDoc(collection(bancoDeDados, 'produtos'), payloadProduto);
       
-      setNome(''); setSku(''); setPreco(''); setSaldoFisico('');
-      setMidiaUrls([]); setVideoUrl(''); setDescricao(''); 
-      setMarca(''); setMaterial(''); setCor('');
+      // Limpeza de Formulário
+      setNome(''); 
+      setSku(''); 
+      setPreco(''); 
+      setSaldoFisico('');
+      setMidiaUrls([]); 
+      setVideoUrl(''); 
+      setDescricao(''); 
+      setMarca(''); 
+      setMaterial(''); 
+      setCor('');
       
       aoFechar();
       alert('📦 Produto completo cadastrado com sucesso no catálogo!');
@@ -126,61 +144,224 @@ export default function ModalNovoProduto({ aberto, aoFechar }: ModalNovoProdutoP
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-sans backdrop-blur-sm transition-opacity">
       <div className="w-full max-w-4xl rounded-xl bg-white shadow-2xl overflow-hidden border border-indigo-500 flex flex-col max-h-[90vh]">
+        
+        {/* Cabeçalho */}
         <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center shrink-0">
           <h2 className="text-xl font-bold text-white flex items-center gap-2">
             <span>📦</span> Novo Produto Detalhado
           </h2>
-          <button onClick={aoFechar} className="text-indigo-200 hover:text-white transition text-2xl leading-none">&times;</button>
+          <button 
+            onClick={aoFechar} 
+            className="text-indigo-200 hover:text-white transition text-2xl leading-none"
+          >
+            &times;
+          </button>
         </div>
 
+        {/* Alerta de Erro Visual (Anti-Silêncio) */}
         {erro && (
-          <div className="bg-red-50 p-4 border-b border-red-200 text-sm font-semibold text-red-700 shrink-0 break-words">⚠️ {erro}</div>
+          <div className="bg-red-50 p-4 border-b border-red-200 text-sm font-semibold text-red-700 shrink-0 break-words">
+            ⚠️ {erro}
+          </div>
         )}
 
+        {/* Corpo do Formulário */}
         <form onSubmit={lidarComEnvio} className="p-6 overflow-y-auto flex-1 custom-scrollbar">
-          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">Informações Base</h3>
+          
+          {/* BLOCO 1: Informações Base */}
+          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">
+            Informações Base
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Nome do Produto (ALL CAPS) *</label><input required type="text" value={nome} onChange={(e) => setNome(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">SKU ERP (ALL CAPS) *</label><input required type="text" value={sku} onChange={(e) => setSku(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm" /></div>
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Preço de Venda (R$) *</label><input required type="number" step="0.01" min="0" value={preco} onChange={(e) => setPreco(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-green-700" /></div>
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Saldo Físico Inicial *</label><input required type="number" min="0" value={saldoFisico} onChange={(e) => setSaldoFisico(e.target.value)} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Nome do Produto (ALL CAPS) *
+              </label>
+              <input 
+                required 
+                type="text" 
+                value={nome} 
+                onChange={(e) => setNome(e.target.value.toUpperCase())} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                SKU ERP (ALL CAPS) *
+              </label>
+              <input 
+                required 
+                type="text" 
+                value={sku} 
+                onChange={(e) => setSku(e.target.value.toUpperCase())} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm" 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Preço de Venda (R$) *
+              </label>
+              <input 
+                required 
+                type="number" 
+                step="0.01" 
+                min="0" 
+                value={preco} 
+                onChange={(e) => setPreco(e.target.value)} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-green-700" 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Saldo Físico Inicial *
+              </label>
+              <input 
+                required 
+                type="number" 
+                min="0" 
+                value={saldoFisico} 
+                onChange={(e) => setSaldoFisico(e.target.value)} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            </div>
           </div>
 
-          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">Mídia e Apresentação</h3>
+          {/* BLOCO 2: Mídia e Apresentação */}
+          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">
+            Mídia e Apresentação
+          </h3>
           <div className="space-y-4 mb-6">
             <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Imagens do Produto (Comprimidas em WebP)</label>
-              <input type="file" accept="image/*" multiple onChange={lidarComUpload} disabled={fazendoUpload} className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition" />
-              {fazendoUpload && <p className="text-sm font-bold text-indigo-600 mt-3 animate-pulse">A comprimir e carregar imagens para o servidor...</p>}
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Imagens do Produto (Comprimidas em WebP)
+              </label>
+              <input 
+                type="file" 
+                accept="image/*" 
+                multiple 
+                onChange={lidarComUpload} 
+                disabled={fazendoUpload} 
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 transition" 
+              />
+              
+              {fazendoUpload && (
+                <p className="text-sm font-bold text-indigo-600 mt-3 animate-pulse">
+                  A comprimir e carregar imagens para o servidor...
+                </p>
+              )}
               
               {midiaUrls.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-3">
                   {midiaUrls.map((url, idx) => (
-                    <div key={idx} className="relative h-20 w-20 rounded-md border border-gray-300 overflow-hidden group">
-                      <img src={url} alt={`Preview ${idx}`} className="h-full w-full object-cover" />
-                      <button type="button" onClick={() => removerImagem(url)} className="absolute inset-0 bg-black/50 text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">X</button>
+                    <div 
+                      key={idx} 
+                      className="relative h-20 w-20 rounded-md border border-gray-300 overflow-hidden group bg-white"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img 
+                        src={url} 
+                        alt={`Preview ${idx}`} 
+                        className="h-full w-full object-cover" 
+                      />
+                      <button 
+                        type="button" 
+                        onClick={() => removerImagem(url)} 
+                        className="absolute inset-0 bg-black/70 text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-sm"
+                      >
+                        Remover
+                      </button>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">URL de Vídeo (YouTube)</label><input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Descrição Comercial</label><textarea value={descricao} onChange={(e) => setDescricao(e.target.value)} rows={4} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="Detalhes públicos..." /></div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                URL de Vídeo (YouTube)
+              </label>
+              <input 
+                type="url" 
+                value={videoUrl} 
+                onChange={(e) => setVideoUrl(e.target.value)} 
+                placeholder="https://youtube.com/watch?v=..."
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Descrição Comercial
+              </label>
+              <textarea 
+                value={descricao} 
+                onChange={(e) => setDescricao(e.target.value)} 
+                rows={4} 
+                placeholder="Detalhes públicos..."
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            </div>
           </div>
 
-          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">Especificações Técnicas (ALL CAPS)</h3>
+          {/* BLOCO 3: Especificações Técnicas */}
+          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">
+            Especificações Técnicas (ALL CAPS)
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Marca</label><input type="text" value={marca} onChange={(e) => setMarca(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Material</label><input type="text" value={material} onChange={(e) => setMaterial(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
-            <div><label className="block text-sm font-semibold text-gray-700 mb-1">Cor</label><input type="text" value={cor} onChange={(e) => setCor(e.target.value.toUpperCase())} className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" /></div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Marca
+              </label>
+              <input 
+                type="text" 
+                value={marca} 
+                onChange={(e) => setMarca(e.target.value.toUpperCase())} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Material
+              </label>
+              <input 
+                type="text" 
+                value={material} 
+                onChange={(e) => setMaterial(e.target.value.toUpperCase())} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">
+                Cor
+              </label>
+              <input 
+                type="text" 
+                value={cor} 
+                onChange={(e) => setCor(e.target.value.toUpperCase())} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+              />
+            </div>
           </div>
 
+          {/* RODAPÉ DO FORMULÁRIO */}
           <div className="sticky bottom-0 bg-white pt-4 border-t border-gray-100 mt-6 flex justify-end gap-3 shrink-0 pb-2">
-            <button type="button" onClick={aoFechar} disabled={carregando || fazendoUpload} className="px-5 py-2.5 rounded font-semibold text-gray-600 hover:bg-gray-100 transition">Cancelar</button>
-            <button type="submit" disabled={carregando || fazendoUpload} className="px-6 py-2.5 rounded font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition disabled:opacity-50 shadow-md">
-              {carregando ? 'Salvando...' : 'Cadastrar Produto Completo'}
+            <button 
+              type="button" 
+              onClick={aoFechar} 
+              disabled={carregando || fazendoUpload} 
+              className="px-5 py-2.5 rounded font-semibold text-gray-600 hover:bg-gray-100 transition"
+            >
+              Cancelar
+            </button>
+            <button 
+              type="submit" 
+              disabled={carregando || fazendoUpload} 
+              className="px-6 py-2.5 rounded font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition disabled:opacity-50 shadow-md"
+            >
+              {carregando ? 'A Gravar...' : 'Cadastrar Produto Completo'}
             </button>
           </div>
+
         </form>
       </div>
     </div>
