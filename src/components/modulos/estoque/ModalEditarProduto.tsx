@@ -1,7 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { 
+  doc, 
+  updateDoc, 
+  serverTimestamp 
+} from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
 import { comprimirImagemWebP } from '@/lib/utils/image';
@@ -12,14 +16,18 @@ interface ProdutoSelecionado {
   sku: string;
   preco: number;
   saldo_estoque: number;
+  categoria?: string;
+  subcategoria?: string;
   descricao?: string;
   midia_urls?: string[];
   video_url?: string;
-  especificacoes_tecnicas?: {
-    marca?: string;
-    material?: string;
-    cor?: string;
-  };
+  especificacoes_tecnicas?: Record<string, string>;
+}
+
+interface EspecificacaoDinamica {
+  id: string;
+  chave: string;
+  valor: string;
 }
 
 interface ModalEditarProdutoProps {
@@ -29,7 +37,10 @@ interface ModalEditarProdutoProps {
 }
 
 export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalEditarProdutoProps) {
-  const { usuarioDb, usuarioAuth } = useAuthStore();
+  const { 
+    usuarioDb, 
+    usuarioAuth 
+  } = useAuthStore();
   
   // Campos Base
   const [nome, setNome] = useState('');
@@ -37,20 +48,24 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
   const [preco, setPreco] = useState('');
   const [saldoFisico, setSaldoFisico] = useState('');
   
+  // Campos de Categorização
+  const [categoria, setCategoria] = useState('');
+  const [subcategoria, setSubcategoria] = useState('');
+  
   // Campos Ricos e Mídia
   const [midiaUrls, setMidiaUrls] = useState<string[]>([]);
   const [videoUrl, setVideoUrl] = useState('');
   const [descricao, setDescricao] = useState('');
-  const [marca, setMarca] = useState('');
-  const [material, setMaterial] = useState('');
-  const [cor, setCor] = useState('');
+  
+  // Especificações Dinâmicas (Chave-Valor)
+  const [especificacoes, setEspecificacoes] = useState<EspecificacaoDinamica[]>([]);
   
   // Controlo de Estado
   const [carregando, setCarregando] = useState(false);
   const [fazendoUpload, setFazendoUpload] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  // Preenchimento reativo quando o modal abre com um produto
+  // Leitura do Banco e Preenchimento Reativo
   useEffect(() => {
     if (aberto && produto) {
       setNome(produto.nome || '');
@@ -58,12 +73,24 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
       setPreco(produto.preco?.toString() || '0');
       setSaldoFisico(produto.saldo_estoque?.toString() || '0');
       
+      setCategoria(produto.categoria || '');
+      setSubcategoria(produto.subcategoria || '');
+      
       setMidiaUrls(produto.midia_urls || []);
       setVideoUrl(produto.video_url || '');
       setDescricao(produto.descricao || '');
-      setMarca(produto.especificacoes_tecnicas?.marca || '');
-      setMaterial(produto.especificacoes_tecnicas?.material || '');
-      setCor(produto.especificacoes_tecnicas?.cor || '');
+      
+      // Conversão do Objeto Record para Array Dinâmico
+      if (produto.especificacoes_tecnicas) {
+        const specsConvertidas = Object.entries(produto.especificacoes_tecnicas).map(([k, v], idx) => ({
+          id: `spec-${idx}-${Date.now()}`,
+          chave: k,
+          valor: v
+        }));
+        setEspecificacoes(specsConvertidas);
+      } else {
+        setEspecificacoes([]);
+      }
       
       setErro(null);
     }
@@ -71,7 +98,7 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
 
   if (!aberto || !produto) return null;
 
-  // Lógica de Upload e Compressão WebP
+  // Lógica de Upload e Compressão WebP (Client-Side)
   const lidarComUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
@@ -114,12 +141,46 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
     setMidiaUrls(prev => prev.filter(url => url !== urlParaRemover));
   };
 
+  // Funções de Controlo das Especificações Dinâmicas
+  const adicionarEspecificacao = () => {
+    setEspecificacoes((prev) => [
+      ...prev, 
+      { 
+        id: Date.now().toString() + Math.random().toString(), 
+        chave: '', 
+        valor: '' 
+      }
+    ]);
+  };
+
+  const removerEspecificacao = (idToRemove: string) => {
+    setEspecificacoes((prev) => prev.filter(spec => spec.id !== idToRemove));
+  };
+
+  const atualizarEspecificacao = (idToUpdate: string, campo: 'chave' | 'valor', novoValor: string) => {
+    setEspecificacoes((prev) => prev.map(spec => {
+      if (spec.id === idToUpdate) {
+        return { ...spec, [campo]: novoValor.toUpperCase() };
+      }
+      return spec;
+    }));
+  };
+
+  // Submissão da Edição
   const lidarComEdicao = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro(null);
     setCarregando(true);
 
     try {
+      // Transformação do Array Dinâmico de volta para Record
+      const specsRecord = especificacoes.reduce((acc, curr) => {
+        if (curr.chave.trim() && curr.valor.trim()) {
+          acc[curr.chave.trim().toUpperCase()] = curr.valor.trim().toUpperCase();
+        }
+        return acc;
+      }, {} as Record<string, string>);
+
       const docRef = doc(bancoDeDados, 'produtos', produto.id);
       
       await updateDoc(docRef, {
@@ -127,21 +188,20 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
         sku: sku.trim(),
         preco: parseFloat(preco) || 0,
         saldo_estoque: parseInt(saldoFisico, 10) || 0,
+        categoria: categoria.trim().toUpperCase(),
+        subcategoria: subcategoria.trim().toUpperCase(),
         descricao: descricao.trim(),
         midia_urls: midiaUrls,
         video_url: videoUrl.trim(),
-        especificacoes_tecnicas: {
-          marca: marca.trim(),
-          material: material.trim(),
-          cor: cor.trim()
-        },
+        especificacoes_tecnicas: specsRecord,
         'auditoria.atualizado_por_id': usuarioAuth?.uid,
         'auditoria.atualizado_por_nome': usuarioDb?.nome_completo,
         'auditoria.atualizado_em': serverTimestamp(),
       });
       
       aoFechar();
-      alert('📦 Produto atualizado com sucesso!');
+      alert('📦 Produto atualizado com sucesso e especificações guardadas!');
+      
     } catch (erroFirebase: any) {
       console.error('[ERRO EDICAO PRODUTO]', erroFirebase);
       setErro(`Falha ao atualizar o banco de dados: ${erroFirebase.message}`);
@@ -151,17 +211,29 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-sans backdrop-blur-sm transition-opacity">
-      <div className="w-full max-w-4xl rounded-xl bg-white shadow-2xl overflow-hidden border border-indigo-500 flex flex-col max-h-[90vh]">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 font-sans backdrop-blur-sm transition-opacity"
+    >
+      <div 
+        className="w-full max-w-4xl rounded-xl bg-white shadow-2xl overflow-hidden border border-indigo-500 flex flex-col max-h-[90vh]"
+      >
         
         {/* Cabeçalho */}
-        <div className="bg-indigo-600 px-6 py-4 flex justify-between items-center shrink-0">
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <span>✏️</span> Editar Produto
+        <div 
+          className="bg-indigo-600 px-6 py-4 flex justify-between items-center shrink-0"
+        >
+          <h2 
+            className="text-xl font-bold text-white flex items-center gap-2"
+          >
+            <span>
+              ✏️
+            </span> 
+            Editar Produto
           </h2>
           <button 
             onClick={aoFechar} 
-            className="text-indigo-200 hover:text-white transition text-2xl leading-none"
+            className="text-indigo-200 hover:text-white transition text-3xl leading-none"
+            title="Fechar Modal"
           >
             &times;
           </button>
@@ -169,21 +241,32 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
 
         {/* Alerta de Erro Visual (Anti-Silêncio) */}
         {erro && (
-          <div className="bg-red-50 p-4 border-b border-red-200 text-sm font-semibold text-red-700 shrink-0 break-words">
-            ⚠️ {erro}
+          <div 
+            className="bg-red-50 p-4 border-b border-red-200 text-sm font-semibold text-red-700 shrink-0 break-words"
+          >
+            ⚠️ <strong>Diagnóstico:</strong> {erro}
           </div>
         )}
 
         {/* Corpo do Formulário */}
-        <form onSubmit={lidarComEdicao} className="p-6 overflow-y-auto flex-1 custom-scrollbar">
+        <form 
+          onSubmit={lidarComEdicao} 
+          className="p-6 overflow-y-auto flex-1 custom-scrollbar"
+        >
           
           {/* BLOCO 1: Informações Base */}
-          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">
+          <h3 
+            className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2"
+          >
             Informações Base
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <div 
+            className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6"
+          >
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
                 Nome do Produto (ALL CAPS) *
               </label>
               <input 
@@ -191,11 +274,14 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
                 type="text" 
                 value={nome} 
                 onChange={(e) => setNome(e.target.value.toUpperCase())} 
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition" 
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
                 SKU ERP (ALL CAPS) *
               </label>
               <input 
@@ -203,11 +289,14 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
                 type="text" 
                 value={sku} 
                 onChange={(e) => setSku(e.target.value.toUpperCase())} 
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm" 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-mono text-sm transition" 
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
                 Preço de Venda (R$) *
               </label>
               <input 
@@ -217,11 +306,14 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
                 min="0" 
                 value={preco} 
                 onChange={(e) => setPreco(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-green-700" 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none font-bold text-green-700 transition" 
               />
             </div>
+            
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
                 Saldo Físico Atual *
               </label>
               <input 
@@ -230,18 +322,57 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
                 min="0" 
                 value={saldoFisico} 
                 onChange={(e) => setSaldoFisico(e.target.value)} 
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition" 
+              />
+            </div>
+
+            <div>
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
+                Categoria (ALL CAPS) *
+              </label>
+              <input 
+                required 
+                type="text" 
+                placeholder="Ex: SMARTPHONES"
+                value={categoria} 
+                onChange={(e) => setCategoria(e.target.value.toUpperCase())} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition" 
+              />
+            </div>
+
+            <div>
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
+                Subcategoria (ALL CAPS)
+              </label>
+              <input 
+                type="text" 
+                placeholder="Ex: IPHONES"
+                value={subcategoria} 
+                onChange={(e) => setSubcategoria(e.target.value.toUpperCase())} 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition" 
               />
             </div>
           </div>
 
           {/* BLOCO 2: Mídia e Apresentação */}
-          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">
+          <h3 
+            className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2"
+          >
             Mídia e Apresentação
           </h3>
-          <div className="space-y-4 mb-6">
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+          <div 
+            className="space-y-4 mb-6"
+          >
+            <div 
+              className="bg-gray-50 p-4 rounded-lg border border-gray-200"
+            >
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-2"
+              >
                 Imagens do Produto (Adicionar Novas em WebP)
               </label>
               <input 
@@ -254,13 +385,17 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
               />
               
               {fazendoUpload && (
-                <p className="text-sm font-bold text-indigo-600 mt-3 animate-pulse">
+                <p 
+                  className="text-sm font-bold text-indigo-600 mt-3 animate-pulse"
+                >
                   A comprimir e carregar imagens para o servidor...
                 </p>
               )}
               
               {midiaUrls.length > 0 && (
-                <div className="mt-4 flex flex-wrap gap-3">
+                <div 
+                  className="mt-4 flex flex-wrap gap-3"
+                >
                   {midiaUrls.map((url, idx) => (
                     <div 
                       key={idx} 
@@ -286,7 +421,9 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
                 URL de Vídeo (YouTube)
               </label>
               <input 
@@ -294,12 +431,14 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
                 value={videoUrl} 
                 onChange={(e) => setVideoUrl(e.target.value)} 
                 placeholder="https://youtube.com/watch?v=..."
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition" 
               />
             </div>
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
+              <label 
+                className="block text-sm font-semibold text-gray-700 mb-1"
+              >
                 Descrição Comercial
               </label>
               <textarea 
@@ -307,67 +446,99 @@ export default function ModalEditarProduto({ aberto, produto, aoFechar }: ModalE
                 onChange={(e) => setDescricao(e.target.value)} 
                 rows={4} 
                 placeholder="Escreva os detalhes que vão convencer o cliente..."
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
+                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none transition custom-scrollbar" 
               />
             </div>
           </div>
 
-          {/* BLOCO 3: Especificações Técnicas */}
-          <h3 className="text-lg font-bold text-indigo-900 mb-4 border-b border-indigo-100 pb-2">
-            Especificações Técnicas (ALL CAPS)
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Marca
-              </label>
-              <input 
-                type="text" 
-                value={marca} 
-                onChange={(e) => setMarca(e.target.value.toUpperCase())} 
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Material
-              </label>
-              <input 
-                type="text" 
-                value={material} 
-                onChange={(e) => setMaterial(e.target.value.toUpperCase())} 
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-1">
-                Cor
-              </label>
-              <input 
-                type="text" 
-                value={cor} 
-                onChange={(e) => setCor(e.target.value.toUpperCase())} 
-                className="w-full border border-gray-300 rounded p-2.5 focus:ring-2 focus:ring-indigo-500 outline-none" 
-              />
-            </div>
+          {/* BLOCO 3: Especificações Técnicas Dinâmicas */}
+          <div 
+            className="flex items-center justify-between mb-4 border-b border-indigo-100 pb-2"
+          >
+            <h3 
+              className="text-lg font-bold text-indigo-900"
+            >
+              Especificações Técnicas
+            </h3>
+            <button
+              type="button"
+              onClick={adicionarEspecificacao}
+              className="px-3 py-1.5 text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 rounded hover:bg-indigo-100 transition"
+            >
+              + Adicionar Campo
+            </button>
+          </div>
+
+          <div 
+            className="space-y-3 mb-2"
+          >
+            {especificacoes.length === 0 ? (
+              <p 
+                className="text-sm text-gray-500 italic"
+              >
+                Nenhuma especificação associada. Clique em Adicionar Campo.
+              </p>
+            ) : (
+              especificacoes.map((spec) => (
+                <div 
+                  key={spec.id} 
+                  className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200"
+                >
+                  <div 
+                    className="flex-1"
+                  >
+                    <input 
+                      type="text" 
+                      placeholder="Chave (Ex: CAPACIDADE)"
+                      value={spec.chave}
+                      onChange={(e) => atualizarEspecificacao(spec.id, 'chave', e.target.value)}
+                      className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none text-sm transition font-semibold"
+                    />
+                  </div>
+                  
+                  <div 
+                    className="flex-1"
+                  >
+                    <input 
+                      type="text" 
+                      placeholder="Valor (Ex: 128GB)"
+                      value={spec.valor}
+                      onChange={(e) => atualizarEspecificacao(spec.id, 'valor', e.target.value)}
+                      className="w-full border border-gray-300 rounded p-2 focus:ring-2 focus:ring-indigo-500 outline-none text-sm transition"
+                    />
+                  </div>
+                  
+                  <button
+                    type="button"
+                    onClick={() => removerEspecificacao(spec.id)}
+                    className="w-8 h-8 flex items-center justify-center rounded text-red-500 bg-red-50 border border-red-200 hover:bg-red-500 hover:text-white transition-colors"
+                    title="Remover especificação"
+                  >
+                    &times;
+                  </button>
+                </div>
+              ))
+            )}
           </div>
 
           {/* RODAPÉ DO FORMULÁRIO */}
-          <div className="sticky bottom-0 bg-white pt-4 border-t border-gray-100 mt-6 flex justify-end gap-3 shrink-0 pb-2">
+          <div 
+            className="sticky bottom-0 bg-white pt-4 border-t border-gray-100 mt-6 flex justify-end gap-3 shrink-0 pb-2"
+          >
             <button 
               type="button" 
               onClick={aoFechar} 
               disabled={carregando || fazendoUpload} 
-              className="px-5 py-2.5 rounded font-semibold text-gray-600 hover:bg-gray-100 transition"
+              className="px-5 py-2.5 rounded-lg font-semibold text-gray-600 border border-gray-300 hover:bg-gray-50 transition"
             >
               Cancelar
             </button>
             <button 
               type="submit" 
               disabled={carregando || fazendoUpload} 
-              className="px-6 py-2.5 rounded font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition disabled:opacity-50 shadow-md"
+              className="px-6 py-2.5 rounded-lg font-black text-white bg-indigo-600 hover:bg-indigo-700 transition disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
             >
-              {carregando ? 'A Atualizar...' : 'Salvar Alterações'}
+              {carregando ? 'A Processar...' : 'Salvar Alterações'}
             </button>
           </div>
 
