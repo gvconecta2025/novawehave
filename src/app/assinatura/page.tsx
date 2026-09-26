@@ -20,13 +20,14 @@ interface ProdutoCatalogo {
   preco: number;
   saldo_estoque: number;
   sku: string;
+  midia_urls?: string[];
 }
 
 interface ItemCarrinho extends ProdutoCatalogo {
   quantidade: number;
 }
 
-export default function WorkspaceAssinatura() {
+export default function WorkspaceCompraSemEstoque() {
   const { 
     usuarioDb, 
     usuarioAuth, 
@@ -34,11 +35,9 @@ export default function WorkspaceAssinatura() {
     carregando: authCarregando 
   } = useAuthStore();
 
-  // Estados Base
   const [produtos, setProdutos] = useState<ProdutoCatalogo[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   
-  // Estados de Formulário e Controlo
   const [nomeCliente, setNomeCliente] = useState('');
   const [telefoneCliente, setTelefoneCliente] = useState('');
   const [termoAceite, setTermoAceite] = useState(false);
@@ -48,7 +47,6 @@ export default function WorkspaceAssinatura() {
   const [erro, setErro] = useState<string | null>(null);
   const [sucesso, setSucesso] = useState<string | null>(null);
 
-  // Barreira RBAC (Acesso Permitido para Vendas e Gestão)
   const acessoPermitido = [
     'Master', 
     'Supervisor', 
@@ -57,7 +55,6 @@ export default function WorkspaceAssinatura() {
     'Folguista'
   ].includes(perfilRbac || '');
 
-  // Carregamento do Catálogo em Tempo Real
   useEffect(() => {
     if (authCarregando || !acessoPermitido) {
       if (!authCarregando && !acessoPermitido) {
@@ -79,7 +76,8 @@ export default function WorkspaceAssinatura() {
           nome: doc.data().nome || 'Produto Sem Nome',
           preco: Number(doc.data().preco) || 0,
           saldo_estoque: Number(doc.data().saldo_estoque) || 0,
-          sku: doc.data().sku || 'N/A'
+          sku: doc.data().sku || 'N/A',
+          midia_urls: doc.data().midia_urls || []
         })) as ProdutoCatalogo[];
 
         setProdutos(dados);
@@ -96,7 +94,6 @@ export default function WorkspaceAssinatura() {
     return () => desinscrever();
   }, [acessoPermitido, authCarregando]);
 
-  // Lógica do Carrinho
   const adicionarAoCarrinho = (produto: ProdutoCatalogo) => {
     setCarrinho((prev) => {
       const existe = prev.find(item => item.id === produto.id);
@@ -121,7 +118,10 @@ export default function WorkspaceAssinatura() {
     setCarrinho(prev => prev.map(item => {
       if (item.id === idProduto) {
         const novaQtd = item.quantidade + delta;
-        return { ...item, quantidade: novaQtd > 0 ? novaQtd : 1 };
+        return { 
+          ...item, 
+          quantidade: novaQtd > 0 ? novaQtd : 1 
+        };
       }
       return item;
     }));
@@ -132,17 +132,16 @@ export default function WorkspaceAssinatura() {
     0
   );
 
-  // Lógica de Submissão (Geração de Comanda)
   const lidarComFinalizacao = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (carrinho.length === 0) {
-      setErro('O carrinho de assinatura não pode estar vazio.');
+      setErro('O pedido não pode estar vazio.');
       return;
     }
     
     if (!termoAceite) {
-      setErro('É obrigatório recolher o aceite dos Termos de Assinatura (LGPD).');
+      setErro('É obrigatório recolher o aceite dos Termos (LGPD) para entrega futura.');
       return;
     }
 
@@ -152,9 +151,9 @@ export default function WorkspaceAssinatura() {
 
     try {
       const payloadComanda = {
-        fluxo_operacional: 'Assinatura We Have',
+        fluxo_operacional: 'Compra Sem Estoque',
         status_atual: 'Aguardando Caixa',
-        cor_hexadecimal: '#F59E0B', // Amber 500
+        cor_hexadecimal: '#F59E0B', 
         valor_total: valorTotal,
         itens: carrinho.map(item => ({
           id_produto: item.id,
@@ -179,9 +178,8 @@ export default function WorkspaceAssinatura() {
 
       await addDoc(collection(bancoDeDados, 'comandas'), payloadComanda);
       
-      setSucesso('✅ Contrato de Assinatura gerado e enviado ao Caixa com sucesso!');
+      setSucesso('✅ Pedido Sem Estoque gerado e enviado ao Caixa com sucesso!');
       
-      // Limpeza de Estado
       setCarrinho([]);
       setNomeCliente('');
       setTelefoneCliente('');
@@ -192,18 +190,21 @@ export default function WorkspaceAssinatura() {
       }, 5000);
 
     } catch (err: any) {
-      console.error('[ERRO FINALIZAR ASSINATURA]', err);
-      setErro(`Falha ao registar a assinatura no sistema: ${err.message}`);
+      console.error('[ERRO FINALIZAR COMPRA SEM ESTOQUE]', err);
+      setErro(`Falha ao registar o pedido no sistema: ${err.message}`);
     } finally {
       setSalvando(false);
     }
   };
 
-  // Bloqueios de Interface
   if (authCarregando) {
     return (
-      <div className="flex h-screen items-center justify-center bg-gray-50">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-600 border-t-transparent">
+      <div 
+        className="flex h-screen items-center justify-center bg-gray-50"
+      >
+        <div 
+          className="h-8 w-8 animate-spin rounded-full border-4 border-amber-600 border-t-transparent"
+        >
         </div>
       </div>
     );
@@ -211,16 +212,26 @@ export default function WorkspaceAssinatura() {
 
   if (!acessoPermitido) {
     return (
-      <div className="flex h-screen w-full flex-col items-center justify-center bg-gray-100 p-8 font-sans">
-        <div className="flex max-w-md flex-col items-center justify-center rounded-2xl border border-red-200 bg-white p-10 text-center shadow-2xl">
-          <span className="mb-4 text-6xl">
+      <div 
+        className="flex h-screen w-full flex-col items-center justify-center bg-gray-100 p-8 font-sans"
+      >
+        <div 
+          className="flex max-w-md flex-col items-center justify-center rounded-2xl border border-red-200 bg-white p-10 text-center shadow-2xl"
+        >
+          <span 
+            className="mb-4 text-6xl"
+          >
             ⛔
           </span>
-          <h1 className="mb-2 text-2xl font-black text-gray-900">
+          <h1 
+            className="mb-2 text-2xl font-black text-gray-900"
+          >
             Acesso Restrito
           </h1>
-          <p className="mb-6 text-sm text-gray-500">
-            O seu perfil ({perfilRbac}) não possui autorização para gerar Assinaturas VIP.
+          <p 
+            className="mb-6 text-sm text-gray-500"
+          >
+            O seu perfil ({perfilRbac}) não possui autorização para gerar Pedidos Sem Estoque.
           </p>
           <Link 
             href="/pdv" 
@@ -235,110 +246,187 @@ export default function WorkspaceAssinatura() {
 
   return (
     <AppLayoutWrapper>
-      <div className="flex min-h-full flex-col p-6 md:p-8">
+      <div 
+        className="flex min-h-full flex-col p-6 md:p-8"
+      >
         
-        {/* Cabeçalho */}
-        <header className="mb-8 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6">
+        <header 
+          className="mb-8 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6"
+        >
           <div>
-            <h1 className="text-3xl font-black text-gray-900">
-              Assinaturas VIP
+            <h1 
+              className="text-3xl font-black text-gray-900"
+            >
+              Compra Sem Estoque
             </h1>
-            <p className="text-gray-500 mt-1">
-              Prateleira infinita e encomendas especiais (Envio direto ao Caixa).
+            <p 
+              className="text-gray-500 mt-1"
+            >
+              Venda de produtos físicos sem estoque local para entrega ou retirada futura.
             </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800 shadow-sm border border-amber-200">
+          <div 
+            className="flex items-center gap-3"
+          >
+            <span 
+              className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-4 py-2 text-sm font-bold text-amber-800 shadow-sm border border-amber-200"
+            >
               <span>
-                🌟
+                🚚
               </span> 
-              Fluxo Prioritário
+              Logística Futura
             </span>
           </div>
         </header>
 
-        {/* Lei 6: Regras Anti-Silêncio */}
         {erro && (
-          <div className="mb-6 shrink-0 rounded-xl border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm break-words">
+          <div 
+            className="mb-6 shrink-0 rounded-xl border-l-4 border-red-500 bg-red-50 p-4 font-semibold text-red-800 shadow-sm break-words"
+          >
             ⚠️ <strong>Diagnóstico:</strong> {erro}
           </div>
         )}
         
         {sucesso && (
-          <div className="mb-6 shrink-0 rounded-xl border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm">
+          <div 
+            className="mb-6 shrink-0 rounded-xl border-l-4 border-green-500 bg-green-50 p-4 font-semibold text-green-800 shadow-sm"
+          >
             {sucesso}
           </div>
         )}
 
-        {/* Workspace Principal (Grid de Layout) */}
-        <div className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden">
+        <div 
+          className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden"
+        >
           
-          {/* Coluna 1: Catálogo de Produtos (Pesquisa e Adição) */}
-          <div className="flex-1 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div 
+            className="flex-1 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+          >
             
-            <div className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-4 shrink-0">
-              <h2 className="text-lg font-bold text-gray-800">
-                Catálogo Base
+            <div 
+              className="flex items-center justify-between border-b border-gray-100 bg-gray-50 p-4 shrink-0"
+            >
+              <h2 
+                className="text-lg font-bold text-gray-800"
+              >
+                Catálogo Global
               </h2>
-              <span className="text-xs font-semibold text-gray-500">
-                Selecione os itens da assinatura
+              <span 
+                className="text-xs font-semibold text-gray-500"
+              >
+                Itens disponíveis para encomenda
               </span>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+            <div 
+              className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+            >
               {carregando ? (
-                <div className="flex flex-col items-center justify-center py-10">
-                  <div className="h-8 w-8 animate-spin rounded-full border-4 border-amber-600 border-t-transparent mb-4">
+                <div 
+                  className="flex flex-col items-center justify-center py-10"
+                >
+                  <div 
+                    className="h-8 w-8 animate-spin rounded-full border-4 border-amber-600 border-t-transparent mb-4"
+                  >
                   </div>
-                  <p className="text-sm font-medium text-gray-400">
+                  <p 
+                    className="text-sm font-medium text-gray-400"
+                  >
                     A carregar catálogo...
                   </p>
                 </div>
               ) : produtos.length === 0 ? (
-                <div className="py-10 text-center text-gray-400 font-medium">
+                <div 
+                  className="py-10 text-center text-gray-400 font-medium"
+                >
                   Nenhum produto registado no sistema.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                  {produtos.map(produto => (
-                    <div 
-                      key={produto.id} 
-                      className="flex flex-col justify-between rounded-lg border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-amber-200 hover:bg-amber-50/30"
-                    >
-                      <div>
-                        <p className="text-xs font-mono text-gray-400 mb-1">
-                          {produto.sku}
-                        </p>
-                        <h3 className="font-bold text-gray-800 text-sm line-clamp-2 mb-2">
-                          {produto.nome}
-                        </h3>
-                        <p className="font-black text-amber-700">
-                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(produto.preco)}
-                        </p>
-                      </div>
-                      
-                      <button 
-                        onClick={() => adicionarAoCarrinho(produto)}
-                        className="mt-4 w-full rounded bg-white border border-gray-300 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-100 hover:text-amber-700 active:scale-95 shadow-sm"
+                <div 
+                  className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+                >
+                  {produtos.map(produto => {
+                    const temImagem = produto.midia_urls && produto.midia_urls.length > 0;
+
+                    return (
+                      <div 
+                        key={produto.id} 
+                        className="flex flex-col justify-between rounded-lg border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-amber-200 hover:bg-amber-50/30"
                       >
-                        + Adicionar ao Contrato
-                      </button>
-                    </div>
-                  ))}
+                        <div 
+                          className="flex items-start gap-3"
+                        >
+                          <div 
+                            className="w-10 h-10 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
+                          >
+                            {temImagem ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img 
+                                src={produto.midia_urls![0]} 
+                                alt={produto.nome} 
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span 
+                                className="text-xl grayscale opacity-50"
+                              >
+                                📱
+                              </span>
+                            )}
+                          </div>
+
+                          <div 
+                            className="flex-1"
+                          >
+                            <p 
+                              className="text-[10px] font-mono text-gray-400 mb-0.5"
+                            >
+                              {produto.sku}
+                            </p>
+                            <h3 
+                              className="font-bold text-gray-800 text-sm line-clamp-2 mb-1 leading-tight"
+                            >
+                              {produto.nome}
+                            </h3>
+                            <p 
+                              className="font-black text-amber-700"
+                            >
+                              {new Intl.NumberFormat('pt-BR', { 
+                                style: 'currency', 
+                                currency: 'BRL' 
+                              }).format(produto.preco)}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <button 
+                          onClick={() => adicionarAoCarrinho(produto)}
+                          className="mt-4 w-full rounded bg-white border border-gray-300 py-2 text-xs font-bold text-gray-700 transition hover:bg-gray-100 hover:text-amber-700 active:scale-95 shadow-sm"
+                        >
+                          + Adicionar ao Pedido
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Coluna 2: Carrinho e Finalização */}
-          <div className="w-full lg:w-[400px] shrink-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div 
+            className="w-full lg:w-[400px] shrink-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden h-[calc(100vh-10rem)]"
+          >
             
-            <div className="border-b border-gray-100 bg-gray-900 p-4 shrink-0">
-              <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <div 
+              className="border-b border-gray-100 bg-gray-900 p-4 shrink-0"
+            >
+              <h2 
+                className="text-lg font-bold text-white flex items-center gap-2"
+              >
                 <span>
-                  📝
+                  📦
                 </span> 
-                Contrato VIP
+                Pedido Sem Estoque
               </h2>
             </div>
 
@@ -347,76 +435,127 @@ export default function WorkspaceAssinatura() {
               className="flex flex-col flex-1 overflow-hidden"
             >
               
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+              <div 
+                className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+              >
                 
-                {/* Secção do Carrinho */}
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
+                <h3 
+                  className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3"
+                >
                   Itens Selecionados
                 </h3>
                 
                 {carrinho.length === 0 ? (
-                  <div className="rounded-lg border-2 border-dashed border-gray-200 py-8 text-center text-sm text-gray-400 font-medium mb-6">
-                    O contrato está vazio.
+                  <div 
+                    className="rounded-lg border-2 border-dashed border-gray-200 py-8 text-center text-sm text-gray-400 font-medium mb-6"
+                  >
+                    O pedido está vazio.
                   </div>
                 ) : (
-                  <div className="space-y-3 mb-6">
-                    {carrinho.map(item => (
-                      <div 
-                        key={item.id} 
-                        className="flex flex-col rounded bg-gray-50 border border-gray-100 p-3"
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <p className="text-xs font-bold text-gray-800 line-clamp-1 pr-2">
-                            {item.nome}
-                          </p>
-                          <button 
-                            type="button" 
-                            onClick={() => removerDoCarrinho(item.id)}
-                            className="text-red-400 hover:text-red-600 transition"
-                            title="Remover Item"
+                  <div 
+                    className="space-y-3 mb-6"
+                  >
+                    {carrinho.map(item => {
+                      const temImagem = item.midia_urls && item.midia_urls.length > 0;
+
+                      return (
+                        <div 
+                          key={item.id} 
+                          className="flex flex-col rounded bg-gray-50 border border-gray-100 p-3"
+                        >
+                          <div 
+                            className="flex justify-between items-start mb-2 gap-2"
                           >
-                            &times;
-                          </button>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <p className="text-sm font-black text-amber-700">
-                            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.preco * item.quantidade)}
-                          </p>
-                          
-                          <div className="flex items-center gap-3 rounded border border-gray-200 bg-white px-2 py-1">
+                            <div 
+                              className="w-8 h-8 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
+                            >
+                              {temImagem ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img 
+                                  src={item.midia_urls![0]} 
+                                  alt={item.nome} 
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span 
+                                  className="text-sm grayscale opacity-50"
+                                >
+                                  📱
+                                </span>
+                              )}
+                            </div>
+
+                            <p 
+                              className="text-xs font-bold text-gray-800 line-clamp-2 flex-1"
+                            >
+                              {item.nome}
+                            </p>
+                            
                             <button 
                               type="button" 
-                              onClick={() => alterarQuantidade(item.id, -1)}
-                              className="text-gray-500 hover:text-gray-900 font-bold"
+                              onClick={() => removerDoCarrinho(item.id)}
+                              className="text-red-400 hover:text-red-600 transition h-6 w-6 flex items-center justify-center rounded hover:bg-red-50"
+                              title="Remover Item"
                             >
-                              -
-                            </button>
-                            <span className="text-xs font-bold text-gray-800 w-4 text-center">
-                              {item.quantidade}
-                            </span>
-                            <button 
-                              type="button" 
-                              onClick={() => alterarQuantidade(item.id, 1)}
-                              className="text-gray-500 hover:text-gray-900 font-bold"
-                            >
-                              +
+                              &times;
                             </button>
                           </div>
+                          
+                          <div 
+                            className="flex justify-between items-center pl-10"
+                          >
+                            <p 
+                              className="text-sm font-black text-amber-700"
+                            >
+                              {new Intl.NumberFormat('pt-BR', { 
+                                style: 'currency', 
+                                currency: 'BRL' 
+                              }).format(item.preco * item.quantidade)}
+                            </p>
+                            
+                            <div 
+                              className="flex items-center gap-3 rounded border border-gray-200 bg-white px-2 py-1"
+                            >
+                              <button 
+                                type="button" 
+                                onClick={() => alterarQuantidade(item.id, -1)}
+                                className="text-gray-500 hover:text-gray-900 font-bold"
+                              >
+                                -
+                              </button>
+                              <span 
+                                className="text-xs font-bold text-gray-800 w-4 text-center"
+                              >
+                                {item.quantidade}
+                              </span>
+                              <button 
+                                type="button" 
+                                onClick={() => alterarQuantidade(item.id, 1)}
+                                className="text-gray-500 hover:text-gray-900 font-bold"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
 
-                {/* Secção de Dados do Cliente e LGPD */}
-                <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 border-t border-gray-100 pt-4">
+                <h3 
+                  className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 border-t border-gray-100 pt-4"
+                >
                   Dados do Cliente
                 </h3>
                 
-                <div className="space-y-4">
+                <div 
+                  className="space-y-4"
+                >
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label 
+                      className="block text-xs font-bold text-gray-700 mb-1"
+                    >
                       Nome Completo *
                     </label>
                     <input 
@@ -429,7 +568,9 @@ export default function WorkspaceAssinatura() {
                   </div>
                   
                   <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">
+                    <label 
+                      className="block text-xs font-bold text-gray-700 mb-1"
+                    >
                       Telefone (WhatsApp) *
                     </label>
                     <input 
@@ -442,30 +583,43 @@ export default function WorkspaceAssinatura() {
                     />
                   </div>
 
-                  {/* Consentimento LGPD explícito */}
-                  <label className="flex items-start gap-2 cursor-pointer mt-4 rounded bg-gray-50 p-3 border border-gray-100">
+                  <label 
+                    className="flex items-start gap-2 cursor-pointer mt-4 rounded bg-gray-50 p-3 border border-gray-100"
+                  >
                     <input 
                       type="checkbox" 
                       checked={termoAceite} 
                       onChange={(e) => setTermoAceite(e.target.checked)} 
                       className="mt-0.5 rounded text-amber-600 focus:ring-amber-500" 
                     />
-                    <span className="text-[10px] text-gray-500 leading-tight">
-                      Confirmo que o cliente está ciente e concorda com a recolha destes dados para a emissão do contrato de Assinatura VIP, em total conformidade com a <strong>LGPD</strong>.
+                    <span 
+                      className="text-[10px] text-gray-500 leading-tight"
+                    >
+                      Confirmo que o cliente está ciente e concorda com a recolha destes dados para a emissão do pedido sem estoque (entrega/retirada futura), em total conformidade com a <strong>LGPD</strong>.
                     </span>
                   </label>
                 </div>
 
               </div>
 
-              {/* Rodapé Fixo do Carrinho */}
-              <div className="border-t border-gray-200 bg-gray-50 p-4 shrink-0">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-sm font-bold text-gray-500 uppercase">
+              <div 
+                className="border-t border-gray-200 bg-gray-50 p-4 shrink-0"
+              >
+                <div 
+                  className="flex justify-between items-center mb-4"
+                >
+                  <span 
+                    className="text-sm font-bold text-gray-500 uppercase"
+                  >
                     Total
                   </span>
-                  <span className="text-2xl font-black text-gray-900">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valorTotal)}
+                  <span 
+                    className="text-2xl font-black text-gray-900"
+                  >
+                    {new Intl.NumberFormat('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    }).format(valorTotal)}
                   </span>
                 </div>
                 
@@ -476,12 +630,14 @@ export default function WorkspaceAssinatura() {
                 >
                   {salvando ? (
                     <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent">
+                      <div 
+                        className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                      >
                       </div>
                       A Processar...
                     </>
                   ) : (
-                    'GERAR CONTRATO (CAIXA)'
+                    'GERAR PEDIDO (CAIXA)'
                   )}
                 </button>
               </div>
