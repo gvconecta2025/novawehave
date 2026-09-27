@@ -63,6 +63,18 @@ const ROTAS_SISTEMA: RotaMenu[] = [
     ] 
   },
   { 
+    nome: 'Garantias e Trocas', 
+    caminho: '/garantias', 
+    icone: '🛡️', 
+    perfisPermitidos: [
+      'Master', 
+      'Supervisor', 
+      'Admin/Dev', 
+      'Vendedores', 
+      'Folguista'
+    ] 
+  },
+  { 
     nome: 'Painel Caixa', 
     caminho: '/caixa', 
     icone: '💰', 
@@ -160,7 +172,9 @@ export default function MenuLateral() {
   
   const pathname = usePathname();
 
-  if (!usuarioAuth || !perfilRbac) return null;
+  if (!usuarioAuth || !perfilRbac) {
+    return null;
+  }
 
   const rotasAutorizadas = ROTAS_SISTEMA.filter((rota) => 
     rota.perfisPermitidos.includes(perfilRbac)
