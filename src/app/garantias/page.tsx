@@ -11,6 +11,7 @@ import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
 import AppLayoutWrapper from '@/components/global/AppLayoutWrapper';
 import Link from 'next/link';
+import ModalNovaGarantia from '@/components/modulos/garantias/ModalNovaGarantia';
 
 interface GarantiaTroca {
   id: string;
@@ -44,6 +45,9 @@ export default function WorkspaceGarantias() {
   const [garantias, setGarantias] = useState<GarantiaTroca[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  
+  // Controle do Modal
+  const [modalGarantiaAberto, setModalGarantiaAberto] = useState(false);
 
   const acessoPermitido = [
     'Master', 
@@ -123,7 +127,7 @@ export default function WorkspaceGarantias() {
   };
 
   const lidarComNovaGarantia = () => {
-    alert('Modal de Nova Garantia em breve! (Próximo Briefing)');
+    setModalGarantiaAberto(true);
   };
 
   if (authCarregando) {
@@ -334,6 +338,12 @@ export default function WorkspaceGarantias() {
             
           </div>
         </div>
+        
+        {/* Renderização do Modal de Garantia */}
+        <ModalNovaGarantia 
+          aberto={modalGarantiaAberto} 
+          aoFechar={() => setModalGarantiaAberto(false)} 
+        />
         
       </div>
     </AppLayoutWrapper>
