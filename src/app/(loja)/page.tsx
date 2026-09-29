@@ -6,13 +6,13 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
-  doc 
+  doc, 
+  addDoc, 
+  serverTimestamp 
 } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
-import { 
-  useComparacaoStore, 
-  ItemComparacao 
-} from '@/store/useComparacaoStore';
+import { useComparacaoStore } from '@/store/useComparacaoStore';
+import { useCarrinhoO2OStore } from '@/store/useCarrinhoO2OStore';
 import Link from 'next/link';
 import ModalComparacao from '@/components/modulos/loja/ModalComparacao';
 
@@ -21,6 +21,7 @@ interface ProdutoVitrine {
   nome: string;
   preco: number;
   saldo_estoque: number;
+  sku: string;
   midia_urls?: string[];
   especificacoes_tecnicas?: {
     marca?: string;
@@ -44,15 +45,33 @@ export default function HomeLoja() {
     desconto_pix_percentual: 10,
   });
   
+  // Estados da Loja
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  
+  // Estados de UI
   const [modalComparacaoAberto, setModalComparacaoAberto] = useState(false);
+  const [drawerCarrinhoAberto, setDrawerCarrinhoAberto] = useState(false);
+  
+  // Estados do Checkout
+  const [nomeClienteCheckout, setNomeClienteCheckout] = useState('');
+  const [carregandoCheckout, setCarregandoCheckout] = useState(false);
+  const [erroCarrinho, setErroCarrinho] = useState<string | null>(null);
 
+  // Stores
   const { 
     itens: itensComparacao, 
     adicionar: adicionarComparacao, 
     remover: removerComparacao 
   } = useComparacaoStore();
+
+  const {
+    itens: itensCarrinho,
+    adicionarItem: adicionarAoCarrinho,
+    removerItem: removerDoCarrinho,
+    alterarQuantidade,
+    limparCarrinho
+  } = useCarrinhoO2OStore();
 
   useEffect(() => {
     const qProdutos = query(
@@ -70,6 +89,7 @@ export default function HomeLoja() {
             nome: data.nome || 'Produto Sem Nome',
             preco: Number(data.preco) || 0,
             saldo_estoque: Number(data.saldo_estoque) || 0,
+            sku: data.sku || 'N/A',
             midia_urls: data.midia_urls || [],
             especificacoes_tecnicas: data.especificacoes_tecnicas || {},
           };
@@ -109,23 +129,6 @@ export default function HomeLoja() {
     };
   }, []);
 
-  const lidarComCompraO2O = (produto: ProdutoVitrine) => {
-    const numeroLoja = configuracoes.whatsapp_loja;
-    
-    const precoFormatado = new Intl.NumberFormat('pt-BR', { 
-      style: 'currency', 
-      currency: 'BRL' 
-    }).format(produto.preco);
-    
-    const texto = `Olá We Have! 👋\n\nTenho interesse em comprar o produto:\n*${produto.nome}*\n\nVi no site por ${precoFormatado}. Como podemos fechar a compra?`;
-    
-    window.open(
-      `https://wa.me/${numeroLoja}?text=${encodeURIComponent(texto)}`, 
-      '_blank', 
-      'noopener,noreferrer'
-    );
-  };
-
   const alternarComparacao = (produto: ProdutoVitrine) => {
     const estaNoComparador = itensComparacao.find(i => i.id === produto.id);
     
@@ -139,6 +142,97 @@ export default function HomeLoja() {
         imagem: produto.midia_urls?.[0],
         especificacoes_tecnicas: produto.especificacoes_tecnicas,
       });
+    }
+  };
+
+  const lidarComAdicaoCarrinho = (produto: ProdutoVitrine) => {
+    adicionarAoCarrinho({
+      id: produto.id,
+      nome: produto.nome,
+      preco: produto.preco,
+      sku: produto.sku,
+      imagem: produto.midia_urls?.[0],
+    });
+    setDrawerCarrinhoAberto(true);
+  };
+
+  const valorTotalCarrinho = itensCarrinho.reduce(
+    (acc, curr) => acc + (curr.preco * curr.quantidade), 
+    0
+  );
+
+  const lidarComCheckoutO2O = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (itensCarrinho.length === 0) {
+      setErroCarrinho('O carrinho está vazio.');
+      return;
+    }
+    
+    if (!nomeClienteCheckout.trim()) {
+      setErroCarrinho('Por favor, informe o seu nome para prosseguirmos com o pedido.');
+      return;
+    }
+
+    setCarregandoCheckout(true);
+    setErroCarrinho(null);
+
+    try {
+      const payloadComanda = {
+        fluxo_operacional: 'Venda Online (O2O)',
+        status_atual: 'Aguardando Cliente (WhatsApp)',
+        cor_hexadecimal: '#10B981', 
+        valor_total: valorTotalCarrinho,
+        itens: itensCarrinho.map(item => ({
+          id_produto: item.id,
+          nome: item.nome,
+          preco_unitario: item.preco,
+          quantidade: item.quantidade,
+          sku: item.sku
+        })),
+        dados_cliente: {
+          nome: nomeClienteCheckout.trim(),
+          telefone: 'Contato via WhatsApp Externo'
+        },
+        auditoria: {
+          criado_por_nome: 'Cliente (Autoatendimento O2O)',
+          criado_em: serverTimestamp(),
+        }
+      };
+
+      const docRef = await addDoc(collection(bancoDeDados, 'comandas'), payloadComanda);
+
+      const saudacao = `Olá We Have! 👋 Me chamo *${nomeClienteCheckout.trim()}* e acabei de montar um pedido no site.\n\n*🛒 MEU PEDIDO (ID: ${docRef.id.slice(0, 6).toUpperCase()}):*\n`;
+      
+      const listaItens = itensCarrinho.map(item => 
+        `- ${item.quantidade}x ${item.nome} (SKU: ${item.sku})`
+      ).join('\n');
+
+      const precoFormatado = new Intl.NumberFormat('pt-BR', { 
+        style: 'currency', 
+        currency: 'BRL' 
+      }).format(valorTotalCarrinho);
+      
+      const fechamento = `\n\n*💰 Valor Total: ${precoFormatado}*\n\nComo podemos prosseguir com o pagamento e entrega?`;
+
+      const textoWhatsApp = encodeURIComponent(saudacao + listaItens + fechamento);
+      const numeroLoja = configuracoes.whatsapp_loja.replace(/\D/g, '') || '5533999999999';
+
+      limparCarrinho();
+      setDrawerCarrinhoAberto(false);
+      setNomeClienteCheckout('');
+      
+      window.open(
+        `https://wa.me/${numeroLoja}?text=${textoWhatsApp}`, 
+        '_blank', 
+        'noopener,noreferrer'
+      );
+
+    } catch (err: any) {
+      console.error('[ERRO CHECKOUT O2O]', err);
+      setErroCarrinho(`Falha ao processar o pedido: ${err.message}`);
+    } finally {
+      setCarregandoCheckout(false);
     }
   };
 
@@ -224,7 +318,7 @@ export default function HomeLoja() {
         </div>
       ) : (
         
-        /* Grid Agressivo: 2 colunas no mobile */
+        /* Grid de Produtos (2 colunas mobile) */
         <div 
           className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 sm:gap-6"
         >
@@ -240,7 +334,6 @@ export default function HomeLoja() {
                 className="group flex flex-col overflow-hidden rounded-xl sm:rounded-2xl border border-gray-200 bg-white shadow-sm transition-all hover:shadow-xl relative"
               >
                 
-                {/* Imagem */}
                 <Link 
                   href={`/produto/${produto.id}`} 
                   className="relative flex aspect-square w-full items-center justify-center bg-gray-50 transition-colors group-hover:bg-gray-100 overflow-hidden"
@@ -269,11 +362,9 @@ export default function HomeLoja() {
                   )}
                 </Link>
 
-                {/* Info (Paddings dinâmicos mobile vs desktop) */}
                 <div 
                   className="flex flex-1 flex-col p-3 sm:p-5"
                 >
-                  
                   <Link 
                     href={`/produto/${produto.id}`}
                   >
@@ -315,15 +406,15 @@ export default function HomeLoja() {
                       className="flex flex-col gap-2 mt-3 sm:mt-4"
                     >
                       <button 
-                        onClick={() => lidarComCompraO2O(produto)} 
-                        className="w-full rounded-lg sm:rounded-xl bg-gray-900 py-2 sm:py-3 text-xs sm:text-sm font-black text-white transition hover:bg-green-600 active:scale-[0.98] shadow-md flex items-center justify-center gap-1 sm:gap-2"
+                        onClick={() => lidarComAdicaoCarrinho(produto)} 
+                        className="w-full rounded-lg sm:rounded-xl bg-blue-600 py-2 sm:py-3 text-xs sm:text-sm font-black text-white transition hover:bg-blue-700 active:scale-[0.98] shadow-md flex items-center justify-center gap-1 sm:gap-2"
                       >
                         <span 
                           className="text-sm sm:text-lg"
                         >
-                          💬
+                          🛒
                         </span> 
-                        Comprar
+                        + Carrinho
                       </button>
                       
                       <label 
@@ -348,48 +439,330 @@ export default function HomeLoja() {
         </div>
       )}
 
-      {/* Widget Flutuante de Comparação */}
-      {itensComparacao.length > 0 && (
+      {/* Widget Flutuante Combinado (Carrinho + Comparador) */}
+      {(itensCarrinho.length > 0 || itensComparacao.length > 0) && (
         <div 
           className="fixed bottom-0 left-0 right-0 z-40 bg-gray-900 text-white shadow-[0_-10px_40px_rgba(0,0,0,0.2)] border-t border-gray-800 animate-slide-up"
         >
           <div 
             className="mx-auto max-w-7xl px-4 py-3 sm:py-4 sm:px-6 lg:px-8 flex items-center justify-between gap-2"
           >
+            
             <div 
-              className="flex items-center gap-3"
+              className="flex items-center gap-4"
             >
-              <span 
-                className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm sm:text-lg font-black shadow-inner"
-              >
-                {itensComparacao.length}
-              </span>
-              <div 
-                className="hidden sm:block"
-              >
-                <p 
-                  className="font-bold text-sm sm:text-base"
+              {itensCarrinho.length > 0 && (
+                <button
+                  onClick={() => setDrawerCarrinhoAberto(true)}
+                  className="flex items-center gap-3 transition-transform hover:scale-105"
                 >
-                  Produtos para comparação
-                </p>
-                <p 
-                  className="text-xs text-gray-400"
+                  <span 
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 text-lg font-black shadow-inner border-2 border-blue-400"
+                  >
+                    {itensCarrinho.length}
+                  </span>
+                  <div 
+                    className="hidden sm:block text-left"
+                  >
+                    <p 
+                      className="font-bold text-sm"
+                    >
+                      Carrinho de Compras
+                    </p>
+                    <p 
+                      className="text-xs text-blue-300"
+                    >
+                      Ver itens e finalizar
+                    </p>
+                  </div>
+                </button>
+              )}
+
+              {itensComparacao.length > 0 && (
+                <div 
+                  className={`flex items-center gap-3 ${itensCarrinho.length > 0 ? 'hidden md:flex pl-4 border-l border-gray-700' : ''}`}
                 >
-                  Limite de 3 simultâneos.
-                </p>
-              </div>
+                  <span 
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gray-700 text-lg font-black shadow-inner"
+                  >
+                    {itensComparacao.length}
+                  </span>
+                  <div 
+                    className="hidden lg:block text-left"
+                  >
+                    <p 
+                      className="font-bold text-sm"
+                    >
+                      Na Comparação
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
             
-            <button 
-              onClick={() => setModalComparacaoAberto(true)} 
-              className="rounded-lg sm:rounded-xl bg-white px-4 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-black text-gray-900 hover:bg-gray-100 shadow-md transition-colors active:scale-95 whitespace-nowrap"
+            <div 
+              className="flex items-center gap-2"
             >
-              Ver Comparação ⚖️
-            </button>
+              {itensComparacao.length > 0 && (
+                <button 
+                  onClick={() => setModalComparacaoAberto(true)} 
+                  className="rounded-lg bg-gray-700 px-4 py-2 sm:px-4 sm:py-2.5 text-xs sm:text-sm font-black text-white hover:bg-gray-600 shadow-md transition-colors active:scale-95 whitespace-nowrap"
+                >
+                  ⚖️ <span className="hidden sm:inline">Comparar</span>
+                </button>
+              )}
+              
+              {itensCarrinho.length > 0 && (
+                <button 
+                  onClick={() => setDrawerCarrinhoAberto(true)} 
+                  className="rounded-lg sm:rounded-xl bg-white px-4 py-2 sm:px-6 sm:py-2.5 text-xs sm:text-sm font-black text-gray-900 hover:bg-gray-100 shadow-md transition-colors active:scale-95 whitespace-nowrap"
+                >
+                  Ver Carrinho 🛒
+                </button>
+              )}
+            </div>
+            
           </div>
         </div>
       )}
 
+      {/* Renderização do Drawer do Carrinho */}
+      {drawerCarrinhoAberto && (
+        <div 
+          className="fixed inset-0 z-50 flex justify-end font-sans"
+        >
+          {/* Overlay Escuro */}
+          <div 
+            onClick={() => setDrawerCarrinhoAberto(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+          >
+          </div>
+          
+          {/* Painel Deslizante Direito */}
+          <div 
+            className="relative z-10 w-full max-w-md bg-white shadow-2xl flex flex-col h-full animate-[slideInRight_0.3s_ease-out_forwards]"
+          >
+            
+            <div 
+              className="flex items-center justify-between px-6 py-5 border-b border-gray-100 bg-gray-900 text-white shrink-0"
+            >
+              <h2 
+                className="text-lg font-black flex items-center gap-2"
+              >
+                <span>
+                  🛒
+                </span> 
+                O Meu Carrinho
+              </h2>
+              <button 
+                onClick={() => setDrawerCarrinhoAberto(false)}
+                className="text-gray-400 hover:text-white transition-colors text-2xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div 
+              className="flex-1 overflow-y-auto p-6 custom-scrollbar bg-gray-50"
+            >
+              
+              {erroCarrinho && (
+                <div 
+                  className="mb-4 rounded-lg border-l-4 border-red-500 bg-red-50 p-3 text-sm font-semibold text-red-700 shadow-sm"
+                >
+                  ⚠️ {erroCarrinho}
+                </div>
+              )}
+
+              {itensCarrinho.length === 0 ? (
+                <div 
+                  className="flex flex-col items-center justify-center py-20 text-center"
+                >
+                  <span 
+                    className="text-6xl mb-4 grayscale opacity-30"
+                  >
+                    🛒
+                  </span>
+                  <p 
+                    className="text-gray-500 font-medium"
+                  >
+                    O seu carrinho está vazio.
+                  </p>
+                </div>
+              ) : (
+                <div 
+                  className="space-y-4"
+                >
+                  {itensCarrinho.map(item => (
+                    <div 
+                      key={item.id} 
+                      className="flex flex-col rounded-xl bg-white border border-gray-200 p-4 shadow-sm"
+                    >
+                      <div 
+                        className="flex justify-between items-start gap-3 mb-3"
+                      >
+                        <div 
+                          className="w-12 h-12 shrink-0 rounded bg-gray-100 flex items-center justify-center border border-gray-200 overflow-hidden"
+                        >
+                          {item.imagem ? (
+                            /* eslint-disable-next-line @next/next/no-img-element */
+                            <img 
+                              src={item.imagem} 
+                              alt={item.nome} 
+                              className="w-full h-full object-cover" 
+                            />
+                          ) : (
+                            <span 
+                              className="text-lg grayscale opacity-40"
+                            >
+                              📱
+                            </span>
+                          )}
+                        </div>
+                        <div 
+                          className="flex-1"
+                        >
+                          <p 
+                            className="text-[10px] font-mono text-gray-400 mb-0.5 leading-none"
+                          >
+                            {item.sku}
+                          </p>
+                          <h4 
+                            className="text-xs font-bold text-gray-800 line-clamp-2 leading-tight"
+                          >
+                            {item.nome}
+                          </h4>
+                        </div>
+                        <button 
+                          type="button"
+                          onClick={() => removerDoCarrinho(item.id)}
+                          className="text-red-400 hover:text-red-600 transition-colors w-6 h-6 flex items-center justify-center bg-red-50 rounded"
+                        >
+                          &times;
+                        </button>
+                      </div>
+
+                      <div 
+                        className="flex justify-between items-center"
+                      >
+                        <div 
+                          className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-2 py-1"
+                        >
+                          <button 
+                            type="button" 
+                            onClick={() => alterarQuantidade(item.id, -1)}
+                            className="text-gray-500 hover:text-gray-900 font-bold"
+                          >
+                            -
+                          </button>
+                          <span 
+                            className="text-xs font-bold text-gray-800 w-4 text-center"
+                          >
+                            {item.quantidade}
+                          </span>
+                          <button 
+                            type="button" 
+                            onClick={() => alterarQuantidade(item.id, 1)}
+                            className="text-gray-500 hover:text-gray-900 font-bold"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <p 
+                          className="text-sm font-black text-green-700"
+                        >
+                          {new Intl.NumberFormat('pt-BR', { 
+                            style: 'currency', 
+                            currency: 'BRL' 
+                          }).format(item.preco * item.quantidade)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {itensCarrinho.length > 0 && (
+              <form 
+                onSubmit={lidarComCheckoutO2O} 
+                className="border-t border-gray-200 bg-white p-6 shrink-0 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]"
+              >
+                
+                <div 
+                  className="mb-4"
+                >
+                  <label 
+                    className="block text-xs font-bold text-gray-700 mb-1"
+                  >
+                    Seu Nome Completo *
+                  </label>
+                  <input 
+                    required
+                    type="text"
+                    value={nomeClienteCheckout}
+                    onChange={(e) => setNomeClienteCheckout(e.target.value)}
+                    placeholder="Como devemos chamá-lo?"
+                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition bg-gray-50"
+                  />
+                </div>
+
+                <div 
+                  className="flex justify-between items-center mb-4 pt-2 border-t border-gray-100"
+                >
+                  <span 
+                    className="text-sm font-bold text-gray-500"
+                  >
+                    Total do Pedido
+                  </span>
+                  <span 
+                    className="text-2xl font-black text-gray-900"
+                  >
+                    {new Intl.NumberFormat('pt-BR', { 
+                      style: 'currency', 
+                      currency: 'BRL' 
+                    }).format(valorTotalCarrinho)}
+                  </span>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={carregandoCheckout} 
+                  className="w-full rounded-xl bg-green-600 px-6 py-4 text-sm font-black text-white transition-all hover:bg-green-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex items-center justify-center gap-2"
+                >
+                  {carregandoCheckout ? (
+                    <>
+                      <div 
+                        className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                      >
+                      </div>
+                      A GERAR PEDIDO...
+                    </>
+                  ) : (
+                    <>
+                      <span 
+                        className="text-lg"
+                      >
+                        💬
+                      </span> 
+                      FINALIZAR VIA WHATSAPP
+                    </>
+                  )}
+                </button>
+                <p 
+                  className="text-center text-[10px] text-gray-400 mt-3"
+                >
+                  O seu pedido será enviado diretamente para a nossa equipa.
+                </p>
+
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Comparação Lateral */}
       <ModalComparacao 
         aberto={modalComparacaoAberto} 
         aoFechar={() => setModalComparacaoAberto(false)} 
