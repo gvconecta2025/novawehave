@@ -6,8 +6,10 @@ import {
   onSnapshot, 
   query, 
   orderBy, 
-  addDoc, 
-  serverTimestamp 
+  serverTimestamp,
+  writeBatch,
+  doc,
+  increment
 } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -67,13 +69,13 @@ export default function PontoDeVenda() {
     const desinscrever = onSnapshot(
       q,
       (snapshot) => {
-        const dados = snapshot.docs.map(doc => ({
-          id: doc.id,
-          nome: doc.data().nome || 'Produto Sem Nome',
-          preco: Number(doc.data().preco) || 0,
-          saldo_estoque: Number(doc.data().saldo_estoque) || 0,
-          sku: doc.data().sku || 'N/A',
-          midia_urls: doc.data().midia_urls || []
+        const dados = snapshot.docs.map(documento => ({
+          id: documento.id,
+          nome: documento.data().nome || 'Produto Sem Nome',
+          preco: Number(documento.data().preco) || 0,
+          saldo_estoque: Number(documento.data().saldo_estoque) || 0,
+          sku: documento.data().sku || 'N/A',
+          midia_urls: documento.data().midia_urls || []
         })) as ProdutoPDV[];
 
         setProdutos(dados);
@@ -149,7 +151,7 @@ export default function PontoDeVenda() {
       const payloadComanda = {
         fluxo_operacional: 'Venda Expressa',
         status_atual: 'Aguardando Caixa',
-        cor_hexadecimal: '#3B82F6', // Blue 500
+        cor_hexadecimal: '#3B82F6', 
         valor_total: valorTotal,
         itens: carrinho.map(item => ({
           id_produto: item.id,
@@ -167,9 +169,25 @@ export default function PontoDeVenda() {
         }
       };
 
-      await addDoc(collection(bancoDeDados, 'comandas'), payloadComanda);
+      // Inicializa o Batch de Escrita
+      const loteEscrita = writeBatch(bancoDeDados);
       
-      setSucesso('✅ Venda Expressa finalizada e enviada ao Caixa!');
+      // Passo A: Registo da Comanda
+      const comandaRef = doc(collection(bancoDeDados, 'comandas'));
+      loteEscrita.set(comandaRef, payloadComanda);
+
+      // Passo B: Dedução de Saldo de Estoque de cada Item
+      carrinho.forEach(item => {
+        const produtoRef = doc(bancoDeDados, 'produtos', item.id);
+        loteEscrita.update(produtoRef, { 
+          saldo_estoque: increment(-item.quantidade) 
+        });
+      });
+
+      // Passo C: Execução Atômica
+      await loteEscrita.commit();
+      
+      setSucesso('✅ Venda Expressa finalizada e estoque deduzido com sucesso!');
       setCarrinho([]);
       
       setTimeout(() => {
@@ -299,7 +317,6 @@ export default function PontoDeVenda() {
                           className="flex items-start gap-3"
                         >
                           
-                          {/* Miniatura Visual (Ação 2) */}
                           <div 
                             className="w-10 h-10 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
                           >
@@ -420,7 +437,6 @@ export default function PontoDeVenda() {
                             className="flex justify-between items-start mb-2 gap-2"
                           >
                             
-                            {/* Miniatura no Carrinho */}
                             <div 
                               className="w-8 h-8 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
                             >
@@ -499,7 +515,6 @@ export default function PontoDeVenda() {
                 )}
               </div>
 
-              {/* Rodapé Fixo do Carrinho */}
               <div 
                 className="border-t border-gray-200 bg-gray-50 p-4 shrink-0"
               >
