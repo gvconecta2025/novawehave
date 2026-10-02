@@ -9,7 +9,9 @@ import {
   serverTimestamp,
   writeBatch,
   doc,
-  increment
+  increment,
+  where,
+  updateDoc
 } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -28,6 +30,28 @@ interface ItemCarrinho extends ProdutoPDV {
   quantidade: number;
 }
 
+interface ItemComandaO2O {
+  id_produto: string;
+  nome: string;
+  preco_unitario: number;
+  quantidade: number;
+  sku: string;
+}
+
+interface ComandaO2O {
+  id: string;
+  status_atual: string;
+  valor_total: number;
+  itens: ItemComandaO2O[];
+  dados_cliente: {
+    nome: string;
+    telefone: string;
+  };
+  auditoria: {
+    criado_em: any;
+  };
+}
+
 export default function PontoDeVenda() {
   const { 
     usuarioDb, 
@@ -36,10 +60,17 @@ export default function PontoDeVenda() {
     carregando: authCarregando 
   } = useAuthStore();
 
+  // Estados da Aba Balcão
   const [produtos, setProdutos] = useState<ProdutoPDV[]>([]);
   const [termoPesquisa, setTermoPesquisa] = useState('');
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   
+  // Estados da Aba Online (O2O)
+  const [comandasOnline, setComandasOnline] = useState<ComandaO2O[]>([]);
+  const [processandoO2O, setProcessandoO2O] = useState<string | null>(null);
+
+  // Estados Globais de UI
+  const [abaAtiva, setAbaAtiva] = useState<'balcao' | 'online'>('balcao');
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -53,6 +84,7 @@ export default function PontoDeVenda() {
     'Folguista'
   ].includes(perfilRbac || '');
 
+  // Efeito 1: Carregamento do Catálogo (Balcão)
   useEffect(() => {
     if (authCarregando || !acessoPermitido) {
       if (!authCarregando && !acessoPermitido) {
@@ -66,7 +98,7 @@ export default function PontoDeVenda() {
       orderBy('nome', 'asc')
     );
 
-    const desinscrever = onSnapshot(
+    const desinscreverCat = onSnapshot(
       q,
       (snapshot) => {
         const dados = snapshot.docs.map(documento => ({
@@ -80,7 +112,6 @@ export default function PontoDeVenda() {
 
         setProdutos(dados);
         setCarregando(false);
-        setErro(null);
       },
       (err: any) => {
         console.error('[ERRO CATÁLOGO PDV]', err);
@@ -89,9 +120,47 @@ export default function PontoDeVenda() {
       }
     );
 
-    return () => desinscrever();
+    return () => desinscreverCat();
   }, [acessoPermitido, authCarregando]);
 
+  // Efeito 2: Monitorização da Fila O2O
+  useEffect(() => {
+    if (authCarregando || !acessoPermitido) return;
+
+    const qO2O = query(
+      collection(bancoDeDados, 'comandas'),
+      where('status_atual', '==', 'Aguardando Cliente (WhatsApp)')
+    );
+
+    const desinscreverO2O = onSnapshot(
+      qO2O,
+      (snapshot) => {
+        const dadosO2O = snapshot.docs.map(doc => ({
+          id: doc.id,
+          status_atual: doc.data().status_atual,
+          valor_total: Number(doc.data().valor_total) || 0,
+          itens: doc.data().itens || [],
+          dados_cliente: doc.data().dados_cliente || { nome: 'Desconhecido', telefone: 'N/A' },
+          auditoria: doc.data().auditoria || {}
+        })) as ComandaO2O[];
+
+        dadosO2O.sort((a, b) => {
+          const tempoA = typeof a.auditoria?.criado_em?.toMillis === 'function' ? a.auditoria.criado_em.toMillis() : 0;
+          const tempoB = typeof b.auditoria?.criado_em?.toMillis === 'function' ? b.auditoria.criado_em.toMillis() : 0;
+          return tempoA - tempoB;
+        });
+
+        setComandasOnline(dadosO2O);
+      },
+      (err: any) => {
+        console.error('[ERRO FILA O2O]', err);
+      }
+    );
+
+    return () => desinscreverO2O();
+  }, [acessoPermitido, authCarregando]);
+
+  // --- FUNÇÕES DA ABA BALCÃO ---
   const produtosFiltrados = produtos.filter(p => 
     p.nome.toLowerCase().includes(termoPesquisa.toLowerCase()) || 
     p.sku.toLowerCase().includes(termoPesquisa.toLowerCase())
@@ -135,7 +204,7 @@ export default function PontoDeVenda() {
     0
   );
 
-  const lidarComFinalizacao = async (e: React.FormEvent) => {
+  const lidarComFinalizacaoBalcao = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (carrinho.length === 0) {
@@ -169,14 +238,11 @@ export default function PontoDeVenda() {
         }
       };
 
-      // Inicializa o Batch de Escrita
       const loteEscrita = writeBatch(bancoDeDados);
       
-      // Passo A: Registo da Comanda
       const comandaRef = doc(collection(bancoDeDados, 'comandas'));
       loteEscrita.set(comandaRef, payloadComanda);
 
-      // Passo B: Dedução de Saldo de Estoque de cada Item
       carrinho.forEach(item => {
         const produtoRef = doc(bancoDeDados, 'produtos', item.id);
         loteEscrita.update(produtoRef, { 
@@ -184,7 +250,6 @@ export default function PontoDeVenda() {
         });
       });
 
-      // Passo C: Execução Atômica
       await loteEscrita.commit();
       
       setSucesso('✅ Venda Expressa finalizada e estoque deduzido com sucesso!');
@@ -199,6 +264,70 @@ export default function PontoDeVenda() {
       setErro(`Falha ao registar a venda no sistema: ${err.message}`);
     } finally {
       setSalvando(false);
+    }
+  };
+
+  // --- FUNÇÕES DA ABA ONLINE (O2O) ---
+  const lidarComConfirmacaoO2O = async (comanda: ComandaO2O) => {
+    setProcessandoO2O(comanda.id);
+    setErro(null);
+    setSucesso(null);
+
+    try {
+      const loteEscrita = writeBatch(bancoDeDados);
+
+      // Ação 3: Baixa no estoque dos itens vendidos via O2O
+      comanda.itens.forEach(item => {
+        const produtoRef = doc(bancoDeDados, 'produtos', item.id_produto);
+        loteEscrita.update(produtoRef, {
+          saldo_estoque: increment(-item.quantidade)
+        });
+      });
+
+      // Atualização do status da comanda para envio ao Caixa
+      const comandaRef = doc(bancoDeDados, 'comandas', comanda.id);
+      loteEscrita.update(comandaRef, {
+        status_atual: 'Aguardando Caixa',
+        'auditoria.atualizado_por_id': usuarioAuth?.uid,
+        'auditoria.atualizado_por_nome': usuarioDb?.nome_completo,
+        'auditoria.atualizado_em': serverTimestamp()
+      });
+
+      await loteEscrita.commit();
+      setSucesso(`✅ Venda Online (O2O) ${comanda.id.substring(0, 6).toUpperCase()} confirmada com sucesso!`);
+      
+      setTimeout(() => {
+        setSucesso(null);
+      }, 5000);
+
+    } catch (error: any) {
+      console.error('[ERRO CONFIRMAR O2O]', error);
+      setErro(`Erro ao processar a venda online: ${error.message}`);
+    } finally {
+      setProcessandoO2O(null);
+    }
+  };
+
+  const lidarComAbandonoO2O = async (idComanda: string) => {
+    if (!confirm('Tem a certeza que deseja marcar este carrinho online como abandonado? O estoque não será alterado.')) return;
+
+    setProcessandoO2O(idComanda);
+    setErro(null);
+
+    try {
+      const comandaRef = doc(bancoDeDados, 'comandas', idComanda);
+      await updateDoc(comandaRef, {
+        status_atual: 'Cancelada (Abandono)',
+        'auditoria.atualizado_por_id': usuarioAuth?.uid,
+        'auditoria.atualizado_por_nome': usuarioDb?.nome_completo,
+        'auditoria.atualizado_em': serverTimestamp()
+      });
+      
+    } catch (error: any) {
+      console.error('[ERRO ABANDONO O2O]', error);
+      setErro(`Erro ao cancelar a venda: ${error.message}`);
+    } finally {
+      setProcessandoO2O(null);
     }
   };
 
@@ -223,7 +352,7 @@ export default function PontoDeVenda() {
         
         {/* Cabeçalho */}
         <header 
-          className="mb-6 shrink-0 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-200 pb-6"
+          className="mb-6 shrink-0 flex flex-col gap-4 border-b border-gray-200 pb-6"
         >
           <div>
             <h1 
@@ -234,8 +363,47 @@ export default function PontoDeVenda() {
             <p 
               className="text-gray-500 mt-1"
             >
-              Frente de loja rápida para Venda Expressa.
+              Frente de loja física e gestão de pedidos online (O2O).
             </p>
+          </div>
+
+          {/* Sistema de Abas (Ação 1) */}
+          <div 
+            className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl w-fit border border-gray-200 shadow-inner"
+          >
+            <button 
+              onClick={() => setAbaAtiva('balcao')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                abaAtiva === 'balcao' 
+                  ? 'bg-white text-blue-700 shadow-sm border border-gray-200' 
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+              }`}
+            >
+              <span>
+                🏪
+              </span>
+              Venda Balcão
+            </button>
+            <button 
+              onClick={() => setAbaAtiva('online')}
+              className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                abaAtiva === 'online' 
+                  ? 'bg-white text-blue-700 shadow-sm border border-gray-200' 
+                  : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
+              }`}
+            >
+              <span>
+                🌐
+              </span>
+              Vendas O2O
+              {comandasOnline.length > 0 && (
+                <span 
+                  className="ml-1 bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full"
+                >
+                  {comandasOnline.length}
+                </span>
+              )}
+            </button>
           </div>
         </header>
 
@@ -256,257 +424,128 @@ export default function PontoDeVenda() {
           </div>
         )}
 
-        {/* Workspace Principal (Grid) */}
-        <div 
-          className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden"
-        >
-          
-          {/* COLUNA 1: Pesquisa e Catálogo */}
+        {/* === ABA: VENDA BALCÃO === */}
+        {abaAtiva === 'balcao' && (
           <div 
-            className="flex-1 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+            className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden animate-fade-in"
           >
-            
+            {/* COLUNA 1: Pesquisa e Catálogo */}
             <div 
-              className="border-b border-gray-100 bg-gray-50 p-4 shrink-0"
+              className="flex-1 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
             >
-              <input 
-                type="text" 
-                placeholder="Pesquisar por nome ou SKU..." 
-                value={termoPesquisa}
-                onChange={(e) => setTermoPesquisa(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div 
-              className="flex-1 overflow-y-auto p-4 custom-scrollbar"
-            >
-              {carregando ? (
-                <div 
-                  className="flex flex-col items-center justify-center py-10"
-                >
-                  <div 
-                    className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-4"
-                  >
-                  </div>
-                  <p 
-                    className="text-sm font-medium text-gray-400"
-                  >
-                    A carregar catálogo...
-                  </p>
-                </div>
-              ) : produtosFiltrados.length === 0 ? (
-                <div 
-                  className="py-10 text-center text-gray-400 font-medium"
-                >
-                  Nenhum produto encontrado.
-                </div>
-              ) : (
-                <div 
-                  className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
-                >
-                  {produtosFiltrados.map(produto => {
-                    const temImagem = produto.midia_urls && produto.midia_urls.length > 0;
-                    
-                    return (
-                      <div 
-                        key={produto.id} 
-                        className="flex flex-col justify-between rounded-lg border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
-                      >
-                        <div 
-                          className="flex items-start gap-3"
-                        >
-                          
-                          <div 
-                            className="w-10 h-10 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
-                          >
-                            {temImagem ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img 
-                                src={produto.midia_urls![0]} 
-                                alt={produto.nome} 
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <span 
-                                className="text-xl grayscale opacity-50"
-                              >
-                                📱
-                              </span>
-                            )}
-                          </div>
-                          
-                          <div 
-                            className="flex-1"
-                          >
-                            <p 
-                              className="text-[10px] font-mono text-gray-400 mb-0.5 leading-none"
-                            >
-                              {produto.sku}
-                            </p>
-                            <h3 
-                              className="font-bold text-gray-800 text-sm line-clamp-2 leading-tight mb-1"
-                            >
-                              {produto.nome}
-                            </h3>
-                            <p 
-                              className="font-black text-blue-700"
-                            >
-                              {new Intl.NumberFormat('pt-BR', { 
-                                style: 'currency', 
-                                currency: 'BRL' 
-                              }).format(produto.preco)}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <div 
-                          className="mt-4 flex items-center justify-between"
-                        >
-                          <span 
-                            className={`text-[10px] font-bold px-2 py-1 rounded ${
-                              produto.saldo_estoque > 0 
-                                ? 'bg-green-100 text-green-800' 
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            ESTOQUE: {produto.saldo_estoque}
-                          </span>
-                          
-                          <button 
-                            onClick={() => adicionarAoCarrinho(produto)}
-                            disabled={produto.saldo_estoque <= 0}
-                            className="rounded bg-white border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-100 hover:text-blue-700 active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            + Add
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* COLUNA 2: Carrinho e Finalização */}
-          <div 
-            className="w-full lg:w-[400px] shrink-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden h-[calc(100vh-10rem)]"
-          >
-            
-            <div 
-              className="border-b border-gray-100 bg-gray-900 p-4 shrink-0"
-            >
-              <h2 
-                className="text-lg font-bold text-white flex items-center gap-2"
+              <div 
+                className="border-b border-gray-100 bg-gray-50 p-4 shrink-0"
               >
-                <span>
-                  🛒
-                </span> 
-                Comanda / Carrinho
-              </h2>
-            </div>
+                <input 
+                  type="text" 
+                  placeholder="Pesquisar por nome ou SKU..." 
+                  value={termoPesquisa}
+                  onChange={(e) => setTermoPesquisa(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-            <form 
-              onSubmit={lidarComFinalizacao} 
-              className="flex flex-col flex-1 overflow-hidden"
-            >
-              
               <div 
                 className="flex-1 overflow-y-auto p-4 custom-scrollbar"
               >
-                {carrinho.length === 0 ? (
+                {carregando ? (
                   <div 
-                    className="rounded-lg border-2 border-dashed border-gray-200 py-8 text-center text-sm text-gray-400 font-medium"
+                    className="flex flex-col items-center justify-center py-10"
                   >
-                    O carrinho está vazio.
+                    <div 
+                      className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent mb-4"
+                    >
+                    </div>
+                    <p 
+                      className="text-sm font-medium text-gray-400"
+                    >
+                      A carregar catálogo...
+                    </p>
+                  </div>
+                ) : produtosFiltrados.length === 0 ? (
+                  <div 
+                    className="py-10 text-center text-gray-400 font-medium"
+                  >
+                    Nenhum produto encontrado.
                   </div>
                 ) : (
                   <div 
-                    className="space-y-3"
+                    className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
                   >
-                    {carrinho.map(item => {
-                      const temImagem = item.midia_urls && item.midia_urls.length > 0;
+                    {produtosFiltrados.map(produto => {
+                      const temImagem = produto.midia_urls && produto.midia_urls.length > 0;
                       
                       return (
                         <div 
-                          key={item.id} 
-                          className="flex flex-col rounded bg-gray-50 border border-gray-100 p-3"
+                          key={produto.id} 
+                          className="flex flex-col justify-between rounded-lg border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
                         >
                           <div 
-                            className="flex justify-between items-start mb-2 gap-2"
+                            className="flex items-start gap-3"
                           >
-                            
                             <div 
-                              className="w-8 h-8 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
+                              className="w-10 h-10 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
                             >
                               {temImagem ? (
                                 /* eslint-disable-next-line @next/next/no-img-element */
                                 <img 
-                                  src={item.midia_urls![0]} 
-                                  alt={item.nome} 
+                                  src={produto.midia_urls![0]} 
+                                  alt={produto.nome} 
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
                                 <span 
-                                  className="text-sm grayscale opacity-50"
+                                  className="text-xl grayscale opacity-50"
                                 >
                                   📱
                                 </span>
                               )}
                             </div>
-
-                            <p 
-                              className="text-xs font-bold text-gray-800 line-clamp-2 flex-1"
-                            >
-                              {item.nome}
-                            </p>
                             
-                            <button 
-                              type="button" 
-                              onClick={() => removerDoCarrinho(item.id)}
-                              className="text-red-400 hover:text-red-600 transition h-6 w-6 flex items-center justify-center rounded hover:bg-red-50"
-                              title="Remover Item"
+                            <div 
+                              className="flex-1"
                             >
-                              &times;
-                            </button>
+                              <p 
+                                className="text-[10px] font-mono text-gray-400 mb-0.5 leading-none"
+                              >
+                                {produto.sku}
+                              </p>
+                              <h3 
+                                className="font-bold text-gray-800 text-sm line-clamp-2 leading-tight mb-1"
+                              >
+                                {produto.nome}
+                              </h3>
+                              <p 
+                                className="font-black text-blue-700"
+                              >
+                                {new Intl.NumberFormat('pt-BR', { 
+                                  style: 'currency', 
+                                  currency: 'BRL' 
+                                }).format(produto.preco)}
+                              </p>
+                            </div>
                           </div>
                           
                           <div 
-                            className="flex justify-between items-center pl-10"
+                            className="mt-4 flex items-center justify-between"
                           >
-                            <p 
-                              className="text-sm font-black text-blue-700"
+                            <span 
+                              className={`text-[10px] font-bold px-2 py-1 rounded ${
+                                produto.saldo_estoque > 0 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-red-100 text-red-800'
+                              }`}
                             >
-                              {new Intl.NumberFormat('pt-BR', { 
-                                style: 'currency', 
-                                currency: 'BRL' 
-                              }).format(item.preco * item.quantidade)}
-                            </p>
+                              ESTOQUE: {produto.saldo_estoque}
+                            </span>
                             
-                            <div 
-                              className="flex items-center gap-3 rounded border border-gray-200 bg-white px-2 py-1"
+                            <button 
+                              onClick={() => adicionarAoCarrinho(produto)}
+                              disabled={produto.saldo_estoque <= 0}
+                              className="rounded bg-white border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-100 hover:text-blue-700 active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                              <button 
-                                type="button" 
-                                onClick={() => alterarQuantidade(item.id, -1)}
-                                className="text-gray-500 hover:text-gray-900 font-bold"
-                              >
-                                -
-                              </button>
-                              <span 
-                                className="text-xs font-bold text-gray-800 w-4 text-center"
-                              >
-                                {item.quantidade}
-                              </span>
-                              <button 
-                                type="button" 
-                                onClick={() => alterarQuantidade(item.id, 1)}
-                                className="text-gray-500 hover:text-gray-900 font-bold"
-                              >
-                                +
-                              </button>
-                            </div>
+                              + Add
+                            </button>
                           </div>
                         </div>
                       );
@@ -514,51 +553,178 @@ export default function PontoDeVenda() {
                   </div>
                 )}
               </div>
+            </div>
 
+            {/* COLUNA 2: Carrinho e Finalização */}
+            <div 
+              className="w-full lg:w-[400px] shrink-0 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden h-[calc(100vh-13rem)]"
+            >
               <div 
-                className="border-t border-gray-200 bg-gray-50 p-4 shrink-0"
+                className="border-b border-gray-100 bg-gray-900 p-4 shrink-0"
               >
-                <div 
-                  className="flex justify-between items-center mb-4"
+                <h2 
+                  className="text-lg font-bold text-white flex items-center gap-2"
                 >
-                  <span 
-                    className="text-sm font-bold text-gray-500 uppercase"
-                  >
-                    Total
-                  </span>
-                  <span 
-                    className="text-2xl font-black text-gray-900"
-                  >
-                    {new Intl.NumberFormat('pt-BR', { 
-                      style: 'currency', 
-                      currency: 'BRL' 
-                    }).format(valorTotal)}
-                  </span>
-                </div>
-                
-                <button 
-                  type="submit" 
-                  disabled={salvando || carrinho.length === 0} 
-                  className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex justify-center items-center gap-2"
-                >
-                  {salvando ? (
-                    <>
-                      <div 
-                        className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
-                      >
-                      </div>
-                      A Processar...
-                    </>
-                  ) : (
-                    'FINALIZAR VENDA (CAIXA)'
-                  )}
-                </button>
+                  <span>
+                    🛒
+                  </span> 
+                  Comanda de Balcão
+                </h2>
               </div>
 
-            </form>
-          </div>
+              <form 
+                onSubmit={lidarComFinalizacaoBalcao} 
+                className="flex flex-col flex-1 overflow-hidden"
+              >
+                <div 
+                  className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+                >
+                  {carrinho.length === 0 ? (
+                    <div 
+                      className="rounded-lg border-2 border-dashed border-gray-200 py-8 text-center text-sm text-gray-400 font-medium"
+                    >
+                      O carrinho está vazio.
+                    </div>
+                  ) : (
+                    <div 
+                      className="space-y-3"
+                    >
+                      {carrinho.map(item => {
+                        const temImagem = item.midia_urls && item.midia_urls.length > 0;
+                        return (
+                          <div 
+                            key={item.id} 
+                            className="flex flex-col rounded bg-gray-50 border border-gray-100 p-3"
+                          >
+                            <div 
+                              className="flex justify-between items-start mb-2 gap-2"
+                            >
+                              <div 
+                                className="w-8 h-8 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
+                              >
+                                {temImagem ? (
+                                  /* eslint-disable-next-line @next/next/no-img-element */
+                                  <img 
+                                    src={item.midia_urls![0]} 
+                                    alt={item.nome} 
+                                    className="w-full h-full object-cover"
+                                  />
+                                ) : (
+                                  <span 
+                                    className="text-sm grayscale opacity-50"
+                                  >
+                                    📱
+                                  </span>
+                                )}
+                              </div>
+                              <p 
+                                className="text-xs font-bold text-gray-800 line-clamp-2 flex-1"
+                              >
+                                {item.nome}
+                              </p>
+                              <button 
+                                type="button" 
+                                onClick={() => removerDoCarrinho(item.id)}
+                                className="text-red-400 hover:text-red-600 transition h-6 w-6 flex items-center justify-center rounded hover:bg-red-50"
+                                title="Remover Item"
+                              >
+                                &times;
+                              </button>
+                            </div>
+                            <div 
+                              className="flex justify-between items-center pl-10"
+                            >
+                              <p 
+                                className="text-sm font-black text-blue-700"
+                              >
+                                {new Intl.NumberFormat('pt-BR', { 
+                                  style: 'currency', 
+                                  currency: 'BRL' 
+                                }).format(item.preco * item.quantidade)}
+                              </p>
+                              <div 
+                                className="flex items-center gap-3 rounded border border-gray-200 bg-white px-2 py-1"
+                              >
+                                <button 
+                                  type="button" 
+                                  onClick={() => alterarQuantidade(item.id, -1)}
+                                  className="text-gray-500 hover:text-gray-900 font-bold"
+                                >
+                                  -
+                                </button>
+                                <span 
+                                  className="text-xs font-bold text-gray-800 w-4 text-center"
+                                >
+                                  {item.quantidade}
+                                </span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => alterarQuantidade(item.id, 1)}
+                                  className="text-gray-500 hover:text-gray-900 font-bold"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
 
-        </div>
+                <div 
+                  className="border-t border-gray-200 bg-gray-50 p-4 shrink-0"
+                >
+                  <div 
+                    className="flex justify-between items-center mb-4"
+                  >
+                    <span 
+                      className="text-sm font-bold text-gray-500 uppercase"
+                    >
+                      Total
+                    </span>
+                    <span 
+                      className="text-2xl font-black text-gray-900"
+                    >
+                      {new Intl.NumberFormat('pt-BR', { 
+                        style: 'currency', 
+                        currency: 'BRL' 
+                      }).format(valorTotal)}
+                    </span>
+                  </div>
+                  <button 
+                    type="submit" 
+                    disabled={salvando || carrinho.length === 0} 
+                    className="w-full rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white transition-all hover:bg-blue-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shadow-md flex justify-center items-center gap-2"
+                  >
+                    {salvando ? (
+                      <>
+                        <div 
+                          className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                        >
+                        </div>
+                        A Processar...
+                      </>
+                    ) : (
+                      'FINALIZAR VENDA (CAIXA)'
+                    )}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* === ABA: ONLINE (O2O) === */}
+        {abaAtiva === 'online' && (
+          <div 
+            className="flex-1 overflow-y-auto overflow-x-hidden animate-fade-in custom-scrollbar"
+          >
+            {/* CONTEÚDO DA ABA ONLINE AQUI (PRÓXIMO ENVIO) */}
+          </div>
+        )}
+
       </div>
     </AppLayoutWrapper>
   );
