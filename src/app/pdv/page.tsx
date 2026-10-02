@@ -60,6 +60,13 @@ export default function PontoDeVenda() {
     carregando: authCarregando 
   } = useAuthStore();
 
+  // Estados Globais de UI e Abas
+  const [abaAtiva, setAbaAtiva] = useState<'balcao' | 'online'>('balcao');
+  const [carregando, setCarregando] = useState(true);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [sucesso, setSucesso] = useState<string | null>(null);
+
   // Estados da Aba Balcão
   const [produtos, setProdutos] = useState<ProdutoPDV[]>([]);
   const [termoPesquisa, setTermoPesquisa] = useState('');
@@ -68,13 +75,6 @@ export default function PontoDeVenda() {
   // Estados da Aba Online (O2O)
   const [comandasOnline, setComandasOnline] = useState<ComandaO2O[]>([]);
   const [processandoO2O, setProcessandoO2O] = useState<string | null>(null);
-
-  // Estados Globais de UI
-  const [abaAtiva, setAbaAtiva] = useState<'balcao' | 'online'>('balcao');
-  const [carregando, setCarregando] = useState(true);
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  const [sucesso, setSucesso] = useState<string | null>(null);
 
   const acessoPermitido = [
     'Master', 
@@ -276,7 +276,7 @@ export default function PontoDeVenda() {
     try {
       const loteEscrita = writeBatch(bancoDeDados);
 
-      // Ação 3: Baixa no estoque dos itens vendidos via O2O
+      // Baixa no estoque dos itens vendidos via O2O
       comanda.itens.forEach(item => {
         const produtoRef = doc(bancoDeDados, 'produtos', item.id_produto);
         loteEscrita.update(produtoRef, {
@@ -367,7 +367,7 @@ export default function PontoDeVenda() {
             </p>
           </div>
 
-          {/* Sistema de Abas (Ação 1) */}
+          {/* Sistema de Abas */}
           <div 
             className="flex items-center gap-2 bg-gray-100 p-1 rounded-xl w-fit border border-gray-200 shadow-inner"
           >
@@ -721,7 +721,202 @@ export default function PontoDeVenda() {
           <div 
             className="flex-1 overflow-y-auto overflow-x-hidden animate-fade-in custom-scrollbar"
           >
-            {/* CONTEÚDO DA ABA ONLINE AQUI (PRÓXIMO ENVIO) */}
+            {comandasOnline.length === 0 ? (
+              <div 
+                className="flex flex-col items-center justify-center py-20 bg-white rounded-xl border border-gray-200 shadow-sm"
+              >
+                <span 
+                  className="text-6xl mb-4 grayscale opacity-30"
+                >
+                  🌐
+                </span>
+                <h3 
+                  className="text-xl font-bold text-gray-700"
+                >
+                  Fila O2O Vazia
+                </h3>
+                <p 
+                  className="text-gray-500 mt-2 text-sm text-center max-w-md"
+                >
+                  Não há pedidos online aguardando confirmação no momento. As vendas captadas pelo site aparecerão aqui.
+                </p>
+              </div>
+            ) : (
+              <div 
+                className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 pb-6"
+              >
+                {comandasOnline.map((comanda) => {
+                  const processando = processandoO2O === comanda.id;
+
+                  return (
+                    <div 
+                      key={comanda.id} 
+                      className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md"
+                    >
+                      
+                      {/* CABEÇALHO DO CARD */}
+                      <div 
+                        className="bg-gray-900 px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
+                      >
+                        <div>
+                          <p 
+                            className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-0.5"
+                          >
+                            Pedido O2O
+                          </p>
+                          <h3 
+                            className="text-sm font-black text-white font-mono tracking-wider"
+                          >
+                            #{comanda.id.slice(0, 8).toUpperCase()}
+                          </h3>
+                        </div>
+                        <div 
+                          className="text-right"
+                        >
+                          <p 
+                            className="text-[10px] font-semibold text-gray-400"
+                          >
+                            Data / Hora
+                          </p>
+                          <p 
+                            className="text-xs font-bold text-gray-200"
+                          >
+                            {comanda.auditoria?.criado_em?.toDate 
+                              ? new Intl.DateTimeFormat('pt-BR', { 
+                                  dateStyle: 'short', 
+                                  timeStyle: 'short' 
+                                }).format(comanda.auditoria.criado_em.toDate()) 
+                              : 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* CORPO DO CARD */}
+                      <div 
+                        className="flex flex-col flex-1 p-5 bg-gray-50/50"
+                      >
+                        <div 
+                          className="mb-4"
+                        >
+                          <p 
+                            className="text-xs font-semibold text-gray-500 mb-1"
+                          >
+                            Cliente / Contato:
+                          </p>
+                          <p 
+                            className="text-sm font-black text-gray-900"
+                          >
+                            {comanda.dados_cliente?.nome || 'Não informado'}
+                          </p>
+                        </div>
+
+                        <div 
+                          className="mb-2"
+                        >
+                          <p 
+                            className="text-xs font-semibold text-gray-500 mb-2"
+                          >
+                            Itens Solicitados:
+                          </p>
+                          <ul 
+                            className="space-y-2"
+                          >
+                            {comanda.itens.map((item, idx) => (
+                              <li 
+                                key={`${item.id_produto}-${idx}`} 
+                                className="flex items-start justify-between gap-3 p-2.5 rounded-lg bg-white border border-gray-100 shadow-sm"
+                              >
+                                <div 
+                                  className="flex-1"
+                                >
+                                  <p 
+                                    className="text-[10px] font-mono text-gray-400 leading-none mb-1"
+                                  >
+                                    {item.sku}
+                                  </p>
+                                  <p 
+                                    className="text-xs font-bold text-gray-800 line-clamp-2"
+                                  >
+                                    {item.quantidade}x {item.nome}
+                                  </p>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      {/* RODAPÉ E AÇÕES */}
+                      <div 
+                        className="p-5 border-t border-gray-100 bg-white shrink-0"
+                      >
+                        <div 
+                          className="flex items-center justify-between mb-5"
+                        >
+                          <span 
+                            className="text-xs font-bold text-gray-500 uppercase tracking-wider"
+                          >
+                            Valor Total
+                          </span>
+                          <span 
+                            className="text-2xl font-black text-green-700"
+                          >
+                            {new Intl.NumberFormat('pt-BR', { 
+                              style: 'currency', 
+                              currency: 'BRL' 
+                            }).format(comanda.valor_total)}
+                          </span>
+                        </div>
+
+                        <div 
+                          className="flex flex-col gap-2.5"
+                        >
+                          <button 
+                            onClick={() => lidarComConfirmacaoO2O(comanda)} 
+                            disabled={processando} 
+                            className="w-full flex items-center justify-center gap-2 rounded-xl bg-green-600 py-3.5 text-xs font-black text-white shadow-md transition-all hover:bg-green-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {processando ? (
+                              <>
+                                <div 
+                                  className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"
+                                >
+                                </div>
+                                A PROCESSAR...
+                              </>
+                            ) : (
+                              <>
+                                <span 
+                                  className="text-base"
+                                >
+                                  📦
+                                </span>
+                                CONFIRMAR & ENVIAR P/ CAIXA
+                              </>
+                            )}
+                          </button>
+
+                          <button 
+                            onClick={() => lidarComAbandonoO2O(comanda.id)} 
+                            disabled={processando} 
+                            className="w-full rounded-xl border border-gray-300 bg-white py-2.5 text-[10px] font-bold text-gray-600 transition-all hover:bg-gray-50 hover:text-red-600 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-widest"
+                          >
+                            Carrinho Abandonado
+                          </button>
+                        </div>
+                        
+                        <p 
+                          className="text-center text-[9px] font-bold text-gray-400 mt-3 uppercase tracking-wider"
+                        >
+                          A confirmação deduzirá o estoque automaticamente.
+                        </p>
+                      </div>
+                      
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 
