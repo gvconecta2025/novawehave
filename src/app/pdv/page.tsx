@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   collection, 
   onSnapshot, 
@@ -16,6 +16,10 @@ import {
 import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
 import AppLayoutWrapper from '@/components/global/AppLayoutWrapper';
+
+// PDV 2.0: Motor de ID e Modal Financeiro
+import { gerarIdComanda } from '@/lib/utils/geradorIdComanda';
+import ModalFechamentoVenda, { PayloadFechamento } from '@/components/modulos/pdv/ModalFechamentoVenda';
 
 interface ProdutoPDV {
   id: string;
@@ -71,6 +75,9 @@ export default function PontoDeVenda() {
   const [produtos, setProdutos] = useState<ProdutoPDV[]>([]);
   const [termoPesquisa, setTermoPesquisa] = useState('');
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
+  
+  // Estado do Modal de Fechamento Financeiro
+  const [modalFechamentoAberto, setModalFechamentoAberto] = useState(false);
   
   // Estados da Aba Online (O2O)
   const [comandasOnline, setComandasOnline] = useState<ComandaO2O[]>([]);
@@ -135,13 +142,13 @@ export default function PontoDeVenda() {
     const desinscreverO2O = onSnapshot(
       qO2O,
       (snapshot) => {
-        const dadosO2O = snapshot.docs.map(doc => ({
-          id: doc.id,
-          status_atual: doc.data().status_atual,
-          valor_total: Number(doc.data().valor_total) || 0,
-          itens: doc.data().itens || [],
-          dados_cliente: doc.data().dados_cliente || { nome: 'Desconhecido', telefone: 'N/A' },
-          auditoria: doc.data().auditoria || {}
+        const dadosO2O = snapshot.docs.map(documento => ({
+          id: documento.id,
+          status_atual: documento.data().status_atual,
+          valor_total: Number(documento.data().valor_total) || 0,
+          itens: documento.data().itens || [],
+          dados_cliente: documento.data().dados_cliente || { nome: 'Desconhecido', telefone: 'N/A' },
+          auditoria: documento.data().auditoria || {}
         })) as ComandaO2O[];
 
         dadosO2O.sort((a, b) => {
@@ -199,29 +206,36 @@ export default function PontoDeVenda() {
     }));
   };
 
-  const valorTotal = carrinho.reduce(
+  const valorTotalCarrinho = carrinho.reduce(
     (acc, curr) => acc + (curr.preco * curr.quantidade), 
     0
   );
 
-  const lidarComFinalizacaoBalcao = async (e: React.FormEvent) => {
+  const lidarComAberturaModalFechamento = (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (carrinho.length === 0) {
       setErro('O carrinho de vendas não pode estar vazio.');
       return;
     }
+    setErro(null);
+    setModalFechamentoAberto(true);
+  };
 
+  // --- AÇÃO: NOVA LÓGICA DE GRAVAÇÃO (CUSTOM ID & BATCH WRITE) ---
+  const lidarComConfirmacaoVenda = async (payloadModal: PayloadFechamento) => {
     setErro(null);
     setSucesso(null);
     setSalvando(true);
 
     try {
+      const sequenciaAleatoriaDia = Math.floor(Math.random() * 999) + 1;
+      const idInteligente = gerarIdComanda('PDV Balcão', sequenciaAleatoriaDia);
+
       const payloadComanda = {
         fluxo_operacional: 'Venda Expressa',
         status_atual: 'Aguardando Caixa',
         cor_hexadecimal: '#3B82F6', 
-        valor_total: valorTotal,
+        valor_total: payloadModal.financeiro.total_final,
         itens: carrinho.map(item => ({
           id_produto: item.id,
           nome: item.nome,
@@ -229,6 +243,18 @@ export default function PontoDeVenda() {
           quantidade: item.quantidade,
           sku: item.sku
         })),
+        dados_cliente: {
+          nome: payloadModal.cliente.nome,
+          cpf: payloadModal.cliente.cpf
+        },
+        dados_financeiros: {
+          subtotal: payloadModal.financeiro.subtotal,
+          desconto: payloadModal.financeiro.desconto,
+          justificativa_desconto: payloadModal.financeiro.justificativa_desconto,
+          total_final: payloadModal.financeiro.total_final,
+          metodos_pagamento: payloadModal.financeiro.metodos_pagamento
+        },
+        vendedor_responsavel: payloadModal.vendedor_responsavel,
         auditoria: {
           criado_por_id: usuarioAuth?.uid || 'desconhecido',
           criado_por_nome: usuarioDb?.nome_completo || 'Operador Oculto',
@@ -240,7 +266,7 @@ export default function PontoDeVenda() {
 
       const loteEscrita = writeBatch(bancoDeDados);
       
-      const comandaRef = doc(collection(bancoDeDados, 'comandas'));
+      const comandaRef = doc(bancoDeDados, 'comandas', idInteligente);
       loteEscrita.set(comandaRef, payloadComanda);
 
       carrinho.forEach(item => {
@@ -252,12 +278,14 @@ export default function PontoDeVenda() {
 
       await loteEscrita.commit();
       
-      setSucesso('✅ Venda Expressa finalizada e estoque deduzido com sucesso!');
+      setSucesso(`✅ Venda Expressa registrada com sucesso! ID: ${idInteligente}`);
+      
       setCarrinho([]);
+      setModalFechamentoAberto(false);
       
       setTimeout(() => {
         setSucesso(null);
-      }, 5000);
+      }, 7000);
 
     } catch (err: any) {
       console.error('[ERRO FINALIZAR VENDA]', err);
@@ -294,7 +322,7 @@ export default function PontoDeVenda() {
       });
 
       await loteEscrita.commit();
-      setSucesso(`✅ Venda Online (O2O) ${comanda.id.substring(0, 6).toUpperCase()} confirmada com sucesso!`);
+      setSucesso(`✅ Venda Online (O2O) ${comanda.id.substring(0, 8).toUpperCase()} confirmada com sucesso!`);
       
       setTimeout(() => {
         setSucesso(null);
@@ -379,7 +407,9 @@ export default function PontoDeVenda() {
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
               }`}
             >
-              <span>
+              <span 
+                className="text-base"
+              >
                 🏪
               </span>
               Venda Balcão
@@ -392,7 +422,9 @@ export default function PontoDeVenda() {
                   : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/50'
               }`}
             >
-              <span>
+              <span 
+                className="text-base"
+              >
                 🌐
               </span>
               Vendas O2O
@@ -472,7 +504,7 @@ export default function PontoDeVenda() {
                   <div 
                     className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
                   >
-                    {produtosFiltrados.map(produto => {
+                    {produtosFiltrados.map((produto) => {
                       const temImagem = produto.midia_urls && produto.midia_urls.length > 0;
                       
                       return (
@@ -565,7 +597,9 @@ export default function PontoDeVenda() {
                 <h2 
                   className="text-lg font-bold text-white flex items-center gap-2"
                 >
-                  <span>
+                  <span 
+                    className="text-xl"
+                  >
                     🛒
                   </span> 
                   Comanda de Balcão
@@ -573,7 +607,7 @@ export default function PontoDeVenda() {
               </div>
 
               <form 
-                onSubmit={lidarComFinalizacaoBalcao} 
+                onSubmit={lidarComAberturaModalFechamento} 
                 className="flex flex-col flex-1 overflow-hidden"
               >
                 <div 
@@ -589,7 +623,7 @@ export default function PontoDeVenda() {
                     <div 
                       className="space-y-3"
                     >
-                      {carrinho.map(item => {
+                      {carrinho.map((item) => {
                         const temImagem = item.midia_urls && item.midia_urls.length > 0;
                         return (
                           <div 
@@ -682,7 +716,7 @@ export default function PontoDeVenda() {
                     <span 
                       className="text-sm font-bold text-gray-500 uppercase"
                     >
-                      Total
+                      Total Parcial
                     </span>
                     <span 
                       className="text-2xl font-black text-gray-900"
@@ -690,7 +724,7 @@ export default function PontoDeVenda() {
                       {new Intl.NumberFormat('pt-BR', { 
                         style: 'currency', 
                         currency: 'BRL' 
-                      }).format(valorTotal)}
+                      }).format(valorTotalCarrinho)}
                     </span>
                   </div>
                   <button 
@@ -707,7 +741,7 @@ export default function PontoDeVenda() {
                         A Processar...
                       </>
                     ) : (
-                      'FINALIZAR VENDA (CAIXA)'
+                      'FECHAR VENDA (CAIXA)'
                     )}
                   </button>
                 </div>
@@ -908,7 +942,7 @@ export default function PontoDeVenda() {
                         <p 
                           className="text-center text-[9px] font-bold text-gray-400 mt-3 uppercase tracking-wider"
                         >
-                          A confirmação deduzirá o estoque automaticamente.
+                          A confirmação deduzirá o estoque.
                         </p>
                       </div>
                       
@@ -919,6 +953,15 @@ export default function PontoDeVenda() {
             )}
           </div>
         )}
+
+        {/* Modal de Fechamento Financeiro */}
+        <ModalFechamentoVenda 
+          aberto={modalFechamentoAberto} 
+          aoFechar={() => setModalFechamentoAberto(false)} 
+          itensCarrinho={carrinho} 
+          valorSubtotal={valorTotalCarrinho} 
+          aoConfirmarVenda={lidarComConfirmacaoVenda} 
+        />
 
       </div>
     </AppLayoutWrapper>
