@@ -7,7 +7,7 @@ import {
   query, 
   orderBy, 
   doc, 
-  addDoc, 
+  setDoc, 
   serverTimestamp 
 } from 'firebase/firestore';
 import { bancoDeDados } from '@/lib/firebase/config';
@@ -15,6 +15,7 @@ import { useComparacaoStore } from '@/store/useComparacaoStore';
 import { useCarrinhoO2OStore } from '@/store/useCarrinhoO2OStore';
 import Link from 'next/link';
 import ModalComparacao from '@/components/modulos/loja/ModalComparacao';
+import { gerarIdComanda } from '@/lib/utils/geradorIdComanda';
 
 interface ProdutoVitrine {
   id: string;
@@ -178,6 +179,10 @@ export default function HomeLoja() {
     setErroCarrinho(null);
 
     try {
+      // Geração do ID Inteligente (O2O)
+      const sequenciaAleatoriaDia = Math.floor(Math.random() * 999) + 1;
+      const idInteligente = gerarIdComanda('Loja Virtual', sequenciaAleatoriaDia);
+
       const payloadComanda = {
         fluxo_operacional: 'Venda Online (O2O)',
         status_atual: 'Aguardando Cliente (WhatsApp)',
@@ -200,9 +205,10 @@ export default function HomeLoja() {
         }
       };
 
-      const docRef = await addDoc(collection(bancoDeDados, 'comandas'), payloadComanda);
+      // Gravação forçando o Custom ID
+      await setDoc(doc(bancoDeDados, 'comandas', idInteligente), payloadComanda);
 
-      const saudacao = `Olá We Have! 👋 Me chamo *${nomeClienteCheckout.trim()}* e acabei de montar um pedido no site.\n\n*🛒 MEU PEDIDO (ID: ${docRef.id.slice(0, 6).toUpperCase()}):*\n`;
+      const saudacao = `Olá We Have! 👋 Me chamo *${nomeClienteCheckout.trim()}* e acabei de montar um pedido no site.\n\n*🛒 MEU PEDIDO (ID: ${idInteligente}):*\n`;
       
       const listaItens = itensCarrinho.map(item => 
         `- ${item.quantidade}x ${item.nome} (SKU: ${item.sku})`
