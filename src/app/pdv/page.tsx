@@ -21,6 +21,7 @@ import AppLayoutWrapper from '@/components/global/AppLayoutWrapper';
 import { gerarIdComanda } from '@/lib/utils/geradorIdComanda';
 import ModalFechamentoVenda, { PayloadFechamento } from '@/components/modulos/pdv/ModalFechamentoVenda';
 
+// Ação 1: Atualização de Tipagem
 interface ProdutoPDV {
   id: string;
   nome: string;
@@ -28,6 +29,8 @@ interface ProdutoPDV {
   saldo_estoque: number;
   sku: string;
   midia_urls?: string[];
+  descricao?: string;
+  categoria?: string;
 }
 
 interface ItemCarrinho extends ProdutoPDV {
@@ -74,6 +77,7 @@ export default function PontoDeVenda() {
   // Estados da Aba Balcão
   const [produtos, setProdutos] = useState<ProdutoPDV[]>([]);
   const [termoPesquisa, setTermoPesquisa] = useState('');
+  const [categoriaAtiva, setCategoriaAtiva] = useState<string>('Todas'); // Ação 1: Estado de Categoria
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   
   // Estado do Modal de Fechamento Financeiro
@@ -114,7 +118,9 @@ export default function PontoDeVenda() {
           preco: Number(documento.data().preco) || 0,
           saldo_estoque: Number(documento.data().saldo_estoque) || 0,
           sku: documento.data().sku || 'N/A',
-          midia_urls: documento.data().midia_urls || []
+          midia_urls: documento.data().midia_urls || [],
+          descricao: documento.data().descricao || '',
+          categoria: documento.data().categoria || 'Geral'
         })) as ProdutoPDV[];
 
         setProdutos(dados);
@@ -168,10 +174,16 @@ export default function PontoDeVenda() {
   }, [acessoPermitido, authCarregando]);
 
   // --- FUNÇÕES DA ABA BALCÃO ---
-  const produtosFiltrados = produtos.filter(p => 
-    p.nome.toLowerCase().includes(termoPesquisa.toLowerCase()) || 
-    p.sku.toLowerCase().includes(termoPesquisa.toLowerCase())
-  );
+  
+  // Ação 1: Extração de Categorias Únicas
+  const categoriasUnicas = ['Todas', ...Array.from(new Set(produtos.map(p => p.categoria || 'Geral')))];
+
+  // Ação 1 e 2: Filtragem Combinada (Pesquisa + Categoria)
+  const produtosFiltrados = produtos.filter(p => {
+    const correspondePesquisa = p.nome.toLowerCase().includes(termoPesquisa.toLowerCase()) || p.sku.toLowerCase().includes(termoPesquisa.toLowerCase());
+    const correspondeCategoria = categoriaAtiva === 'Todas' || p.categoria === categoriaAtiva;
+    return correspondePesquisa && correspondeCategoria;
+  });
 
   const adicionarAoCarrinho = (produto: ProdutoPDV) => {
     setCarrinho((prev) => {
@@ -221,7 +233,11 @@ export default function PontoDeVenda() {
     setModalFechamentoAberto(true);
   };
 
-  // --- AÇÃO: NOVA LÓGICA DE GRAVAÇÃO (CUSTOM ID & BATCH WRITE) ---
+  // Ação 3: Omnichannel Fallback
+  const lidarComVendaDigital = (nomeProduto: string) => {
+    window.open(`/?busca=${encodeURIComponent(nomeProduto)}`, '_blank');
+  };
+
   const lidarComConfirmacaoVenda = async (payloadModal: PayloadFechamento) => {
     setErro(null);
     setSucesso(null);
@@ -461,24 +477,47 @@ export default function PontoDeVenda() {
           <div 
             className="flex flex-col lg:flex-row gap-8 flex-1 overflow-hidden animate-fade-in"
           >
-            {/* COLUNA 1: Pesquisa e Catálogo */}
+            {/* COLUNA 1: Pesquisa, Filtros e Catálogo */}
             <div 
               className="flex-1 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
             >
               <div 
-                className="border-b border-gray-100 bg-gray-50 p-4 shrink-0"
+                className="flex flex-col shrink-0"
               >
-                <input 
-                  type="text" 
-                  placeholder="Pesquisar por nome ou SKU..." 
-                  value={termoPesquisa}
-                  onChange={(e) => setTermoPesquisa(e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
-                />
+                <div 
+                  className="border-b border-gray-100 bg-gray-50 p-4"
+                >
+                  <input 
+                    type="text" 
+                    placeholder="Pesquisar por nome ou SKU..." 
+                    value={termoPesquisa}
+                    onChange={(e) => setTermoPesquisa(e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 p-3 text-sm outline-none transition focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                {/* Ação 2: Carrossel de Filtros de Categoria */}
+                <div 
+                  className="flex gap-2 overflow-x-auto p-4 border-b border-gray-100 bg-white custom-scrollbar shrink-0"
+                >
+                  {categoriasUnicas.map(cat => (
+                    <button 
+                      key={cat}
+                      onClick={() => setCategoriaAtiva(cat)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap border transition-colors ${
+                        categoriaAtiva === cat 
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-md' 
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:bg-gray-100'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div 
-                className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+                className="flex-1 overflow-y-auto p-4 custom-scrollbar bg-gray-50/50"
               >
                 {carregando ? (
                   <div 
@@ -498,86 +537,136 @@ export default function PontoDeVenda() {
                   <div 
                     className="py-10 text-center text-gray-400 font-medium"
                   >
-                    Nenhum produto encontrado.
+                    Nenhum produto encontrado com os filtros atuais.
                   </div>
                 ) : (
+                  /* Ação 2: Refatoração da UI (Cards Maiores) */
                   <div 
-                    className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4"
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                   >
                     {produtosFiltrados.map((produto) => {
                       const temImagem = produto.midia_urls && produto.midia_urls.length > 0;
+                      const emEstoque = produto.saldo_estoque > 0;
                       
                       return (
                         <div 
                           key={produto.id} 
-                          className="flex flex-col justify-between rounded-lg border border-gray-100 bg-gray-50 p-4 transition-colors hover:border-blue-200 hover:bg-blue-50/30"
+                          className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-lg group"
                         >
+                          {/* Imagem Superior */}
                           <div 
-                            className="flex items-start gap-3"
+                            className="relative w-full h-40 bg-gray-100 flex items-center justify-center border-b border-gray-100 overflow-hidden"
+                          >
+                            {temImagem ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img 
+                                src={produto.midia_urls![0]} 
+                                alt={produto.nome} 
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                            ) : (
+                              <span 
+                                className="text-4xl grayscale opacity-30 transition-transform duration-300 group-hover:scale-110"
+                              >
+                                📱
+                              </span>
+                            )}
+                            
+                            <span 
+                              className="absolute top-3 left-3 bg-white/90 backdrop-blur text-[10px] font-black text-gray-800 px-2.5 py-1 rounded-md shadow-sm border border-gray-200 uppercase tracking-widest"
+                            >
+                              {produto.categoria}
+                            </span>
+                          </div>
+                          
+                          {/* Corpo do Card */}
+                          <div 
+                            className="flex flex-col flex-1 p-4"
                           >
                             <div 
-                              className="w-10 h-10 shrink-0 aspect-square rounded overflow-hidden bg-gray-200 flex items-center justify-center border border-gray-300"
+                              className="mb-3"
                             >
-                              {temImagem ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img 
-                                  src={produto.midia_urls![0]} 
-                                  alt={produto.nome} 
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <span 
-                                  className="text-xl grayscale opacity-50"
+                              <p 
+                                className="text-[10px] font-mono text-gray-400 mb-1 leading-none"
+                              >
+                                SKU: {produto.sku}
+                              </p>
+                              <h3 
+                                className="font-bold text-gray-900 text-sm line-clamp-2 leading-snug mb-1"
+                              >
+                                {produto.nome}
+                              </h3>
+                              {produto.descricao && (
+                                <p 
+                                  className="text-[10px] text-gray-500 line-clamp-2 mt-1"
                                 >
-                                  📱
-                                </span>
+                                  {produto.descricao}
+                                </p>
                               )}
                             </div>
                             
                             <div 
-                              className="flex-1"
+                              className="mt-auto pt-2 border-t border-gray-50 flex items-end justify-between mb-4"
                             >
-                              <p 
-                                className="text-[10px] font-mono text-gray-400 mb-0.5 leading-none"
+                              <div>
+                                <p 
+                                  className="text-[10px] text-gray-500 font-semibold mb-0.5"
+                                >
+                                  Preço Base
+                                </p>
+                                <p 
+                                  className="text-lg font-black text-blue-700 leading-none"
+                                >
+                                  {new Intl.NumberFormat('pt-BR', { 
+                                    style: 'currency', 
+                                    currency: 'BRL' 
+                                  }).format(produto.preco)}
+                                </p>
+                              </div>
+                              
+                              <div 
+                                className="flex flex-col items-end"
                               >
-                                {produto.sku}
-                              </p>
-                              <h3 
-                                className="font-bold text-gray-800 text-sm line-clamp-2 leading-tight mb-1"
-                              >
-                                {produto.nome}
-                              </h3>
-                              <p 
-                                className="font-black text-blue-700"
-                              >
-                                {new Intl.NumberFormat('pt-BR', { 
-                                  style: 'currency', 
-                                  currency: 'BRL' 
-                                }).format(produto.preco)}
-                              </p>
+                                <span 
+                                  className={`text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-wider mb-1 ${
+                                    emEstoque 
+                                      ? 'bg-green-100 text-green-800' 
+                                      : 'bg-red-100 text-red-800'
+                                  }`}
+                                >
+                                  ESTOQUE: {produto.saldo_estoque}
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                          
-                          <div 
-                            className="mt-4 flex items-center justify-between"
-                          >
-                            <span 
-                              className={`text-[10px] font-bold px-2 py-1 rounded ${
-                                produto.saldo_estoque > 0 
-                                  ? 'bg-green-100 text-green-800' 
-                                  : 'bg-red-100 text-red-800'
-                              }`}
-                            >
-                              ESTOQUE: {produto.saldo_estoque}
-                            </span>
+
+                            {/* Ação 3: O Pulo do Gato (Omnichannel Fallback) */}
+                            {emEstoque ? (
+                              <button 
+                                onClick={() => adicionarAoCarrinho(produto)}
+                                className="w-full rounded-xl bg-blue-50 border border-blue-200 py-2.5 text-xs font-black text-blue-700 transition hover:bg-blue-600 hover:text-white hover:border-blue-600 active:scale-95 flex items-center justify-center gap-2"
+                              >
+                                <span 
+                                  className="text-sm"
+                                >
+                                  ➕
+                                </span> 
+                                ADICIONAR (BALCÃO)
+                              </button>
+                            ) : (
+                              <button 
+                                onClick={() => lidarComVendaDigital(produto.nome)}
+                                className="w-full rounded-xl bg-purple-50 border border-purple-300 py-2.5 text-xs font-black text-purple-700 transition hover:bg-purple-600 hover:text-white hover:border-purple-600 active:scale-95 shadow-sm flex items-center justify-center gap-2"
+                                title="Redirecionar para Loja Pública"
+                              >
+                                <span 
+                                  className="text-sm"
+                                >
+                                  🌐
+                                </span> 
+                                VENDA DIGITAL (O2O)
+                              </button>
+                            )}
                             
-                            <button 
-                              onClick={() => adicionarAoCarrinho(produto)}
-                              disabled={produto.saldo_estoque <= 0}
-                              className="rounded bg-white border border-gray-300 px-3 py-1.5 text-xs font-bold text-gray-700 transition hover:bg-gray-100 hover:text-blue-700 active:scale-95 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              + Add
-                            </button>
                           </div>
                         </div>
                       );
@@ -801,7 +890,7 @@ export default function PontoDeVenda() {
                           <h3 
                             className="text-sm font-black text-white font-mono tracking-wider"
                           >
-                            #{comanda.id.slice(0, 8).toUpperCase()}
+                            #{comanda.id.slice(0, 15).toUpperCase()}
                           </h3>
                         </div>
                         <div 
