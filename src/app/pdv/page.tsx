@@ -17,11 +17,11 @@ import { bancoDeDados } from '@/lib/firebase/config';
 import { useAuthStore } from '@/store/useAuthStore';
 import AppLayoutWrapper from '@/components/global/AppLayoutWrapper';
 
-// PDV 2.0: Motor de ID e Modal Financeiro
+// PDV 2.0: Motor de ID, Modal Financeiro e Seletor CRM
 import { gerarIdComanda } from '@/lib/utils/geradorIdComanda';
 import ModalFechamentoVenda, { PayloadFechamento } from '@/components/modulos/pdv/ModalFechamentoVenda';
+import SeletorClienteModal, { ClienteSelecionado } from '@/components/modulos/crm/SeletorClienteModal';
 
-// Ação 1: Atualização de Tipagem
 interface ProdutoPDV {
   id: string;
   nome: string;
@@ -77,10 +77,12 @@ export default function PontoDeVenda() {
   // Estados da Aba Balcão
   const [produtos, setProdutos] = useState<ProdutoPDV[]>([]);
   const [termoPesquisa, setTermoPesquisa] = useState('');
-  const [categoriaAtiva, setCategoriaAtiva] = useState<string>('Todas'); // Ação 1: Estado de Categoria
+  const [categoriaAtiva, setCategoriaAtiva] = useState<string>('Todas');
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   
-  // Estado do Modal de Fechamento Financeiro
+  // Estado do CRM e Modais
+  const [clienteVinculado, setClienteVinculado] = useState<ClienteSelecionado | null>(null);
+  const [modalSeletorAberto, setModalSeletorAberto] = useState(false);
   const [modalFechamentoAberto, setModalFechamentoAberto] = useState(false);
   
   // Estados da Aba Online (O2O)
@@ -175,10 +177,8 @@ export default function PontoDeVenda() {
 
   // --- FUNÇÕES DA ABA BALCÃO ---
   
-  // Ação 1: Extração de Categorias Únicas
   const categoriasUnicas = ['Todas', ...Array.from(new Set(produtos.map(p => p.categoria || 'Geral')))];
 
-  // Ação 1 e 2: Filtragem Combinada (Pesquisa + Categoria)
   const produtosFiltrados = produtos.filter(p => {
     const correspondePesquisa = p.nome.toLowerCase().includes(termoPesquisa.toLowerCase()) || p.sku.toLowerCase().includes(termoPesquisa.toLowerCase());
     const correspondeCategoria = categoriaAtiva === 'Todas' || p.categoria === categoriaAtiva;
@@ -233,11 +233,11 @@ export default function PontoDeVenda() {
     setModalFechamentoAberto(true);
   };
 
-  // Ação 3: Omnichannel Fallback
   const lidarComVendaDigital = (nomeProduto: string) => {
     window.open(`/?busca=${encodeURIComponent(nomeProduto)}`, '_blank');
   };
 
+  // --- GRAVAÇÃO COM INTEGRAÇÃO CRM (CUSTOM ID & BATCH WRITE) ---
   const lidarComConfirmacaoVenda = async (payloadModal: PayloadFechamento) => {
     setErro(null);
     setSucesso(null);
@@ -246,6 +246,17 @@ export default function PontoDeVenda() {
     try {
       const sequenciaAleatoriaDia = Math.floor(Math.random() * 999) + 1;
       const idInteligente = gerarIdComanda('PDV Balcão', sequenciaAleatoriaDia);
+
+      // Injeção prioritária do Cliente Vinculado (CRM)
+      const dadosClienteFinal = clienteVinculado ? {
+        id_cliente: clienteVinculado.id,
+        nome: clienteVinculado.nome,
+        whatsapp: clienteVinculado.whatsapp,
+        cpf_rg: clienteVinculado.cpf_rg
+      } : {
+        nome: payloadModal.cliente.nome,
+        cpf: payloadModal.cliente.cpf
+      };
 
       const payloadComanda = {
         fluxo_operacional: 'Venda Expressa',
@@ -259,10 +270,7 @@ export default function PontoDeVenda() {
           quantidade: item.quantidade,
           sku: item.sku
         })),
-        dados_cliente: {
-          nome: payloadModal.cliente.nome,
-          cpf: payloadModal.cliente.cpf
-        },
+        dados_cliente: dadosClienteFinal,
         dados_financeiros: {
           subtotal: payloadModal.financeiro.subtotal,
           desconto: payloadModal.financeiro.desconto,
@@ -296,7 +304,9 @@ export default function PontoDeVenda() {
       
       setSucesso(`✅ Venda Expressa registrada com sucesso! ID: ${idInteligente}`);
       
+      // Limpeza Total do Estado
       setCarrinho([]);
+      setClienteVinculado(null);
       setModalFechamentoAberto(false);
       
       setTimeout(() => {
@@ -496,7 +506,6 @@ export default function PontoDeVenda() {
                   />
                 </div>
 
-                {/* Ação 2: Carrossel de Filtros de Categoria */}
                 <div 
                   className="flex gap-2 overflow-x-auto p-4 border-b border-gray-100 bg-white custom-scrollbar shrink-0"
                 >
@@ -540,7 +549,6 @@ export default function PontoDeVenda() {
                     Nenhum produto encontrado com os filtros atuais.
                   </div>
                 ) : (
-                  /* Ação 2: Refatoração da UI (Cards Maiores) */
                   <div 
                     className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
                   >
@@ -639,7 +647,6 @@ export default function PontoDeVenda() {
                               </div>
                             </div>
 
-                            {/* Ação 3: O Pulo do Gato (Omnichannel Fallback) */}
                             {emEstoque ? (
                               <button 
                                 onClick={() => adicionarAoCarrinho(produto)}
@@ -693,6 +700,58 @@ export default function PontoDeVenda() {
                   </span> 
                   Comanda de Balcão
                 </h2>
+              </div>
+
+              {/* BLOCO DE CLIENTE VINCULADO */}
+              <div 
+                className="border-b border-gray-100 bg-gray-50 p-4 shrink-0 flex flex-col gap-3"
+              >
+                {!clienteVinculado ? (
+                  <button 
+                    type="button" 
+                    onClick={() => setModalSeletorAberto(true)}
+                    className="w-full rounded-lg border border-dashed border-indigo-300 bg-indigo-50/50 py-3 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100 flex items-center justify-center gap-2"
+                  >
+                    <span 
+                      className="text-base"
+                    >
+                      👤
+                    </span>
+                    VINCULAR CLIENTE (OPCIONAL)
+                  </button>
+                ) : (
+                  <div 
+                    className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 p-3 shadow-sm"
+                  >
+                    <div 
+                      className="flex flex-col"
+                    >
+                      <span 
+                        className="text-[10px] font-bold text-indigo-400 uppercase tracking-widest mb-0.5"
+                      >
+                        Cliente Vinculado
+                      </span>
+                      <span 
+                        className="text-sm font-black text-indigo-900 line-clamp-1"
+                      >
+                        {clienteVinculado.nome}
+                      </span>
+                      <span 
+                        className="text-xs font-mono text-indigo-600 mt-0.5"
+                      >
+                        📱 {clienteVinculado.whatsapp || 'Sem Número'}
+                      </span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setClienteVinculado(null)}
+                      className="h-8 w-8 rounded-md bg-white border border-indigo-200 text-red-500 hover:bg-red-50 hover:text-red-700 transition-colors flex items-center justify-center text-lg shadow-sm shrink-0"
+                      title="Remover Cliente"
+                    >
+                      &times;
+                    </button>
+                  </div>
+                )}
               </div>
 
               <form 
@@ -833,6 +892,13 @@ export default function PontoDeVenda() {
                       'FECHAR VENDA (CAIXA)'
                     )}
                   </button>
+                  {clienteVinculado && (
+                    <p 
+                      className="text-[9px] font-bold text-center mt-2 text-indigo-600 uppercase tracking-widest"
+                    >
+                      Venda será atribuída a {clienteVinculado.nome.split(' ')[0]}
+                    </p>
+                  )}
                 </div>
               </form>
             </div>
@@ -876,8 +942,6 @@ export default function PontoDeVenda() {
                       key={comanda.id} 
                       className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden transition-all hover:shadow-md"
                     >
-                      
-                      {/* CABEÇALHO DO CARD */}
                       <div 
                         className="bg-gray-900 px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0"
                       >
@@ -914,7 +978,6 @@ export default function PontoDeVenda() {
                         </div>
                       </div>
 
-                      {/* CORPO DO CARD */}
                       <div 
                         className="flex flex-col flex-1 p-5 bg-gray-50/50"
                       >
@@ -969,7 +1032,6 @@ export default function PontoDeVenda() {
                         </div>
                       </div>
 
-                      {/* RODAPÉ E AÇÕES */}
                       <div 
                         className="p-5 border-t border-gray-100 bg-white shrink-0"
                       >
@@ -1050,6 +1112,13 @@ export default function PontoDeVenda() {
           itensCarrinho={carrinho} 
           valorSubtotal={valorTotalCarrinho} 
           aoConfirmarVenda={lidarComConfirmacaoVenda} 
+        />
+
+        {/* Modal Seletor de CRM */}
+        <SeletorClienteModal 
+          aberto={modalSeletorAberto} 
+          aoFechar={() => setModalSeletorAberto(false)} 
+          aoSelecionar={(cliente) => setClienteVinculado(cliente)} 
         />
 
       </div>
